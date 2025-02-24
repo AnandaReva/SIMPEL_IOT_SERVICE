@@ -2,42 +2,41 @@
 #include <HTTPClient.h>
 #include <ArduinoWebsockets.h>
 
-const char* ssid = "sudah";
-const char* WifiPassword = "Satudua12";
-const char* serverUrl = "http://10.4.156.215:5001"; // Ganti dengan IP komputer yang menjalankan server
+using namespace websockets;
 
+const char* ssid = "hayolo";
+const char* WifiPassword = "qwerqwer";
+const char* serverUrl = "http://10.4.156.215:5001"; // Ganti dengan IP server
 
-// cred
-const char* deviceName = "device_j";
+// Credential perangkat
+const char* deviceName = "device_i";
 const char* devicePassword = "qwerqwer";
+
+// URL WebSocket
+String websocket_server = "ws://10.4.156.215:5001/device-connect?name=" + String(deviceName) + "&password=" + String(devicePassword);
+
+// Objek WebSocket
+WebsocketsClient client;
+
+// Sensor variable
+float voltage;
+float current;
+float power;
+float energy;
+float frequency;
+float power_factor;
 
 void setup() {
   Serial.begin(115200);
   
   WiFi.mode(WIFI_STA);
-
-  // Scan WiFi sebelum menyambungkan
   scanAvailableWifis();
 
   WiFi.begin(ssid, WifiPassword);
 
-  // Menampilkan informasi perangkat
-  Serial.print("Device Name: ");
-  Serial.println(deviceName);
-  Serial.print("Device Password: ");
-  Serial.println(devicePassword);
-
-  // Menampilkan informasi koneksi WiFi
   Serial.print("Connecting to ");
   Serial.println(ssid);
 
-  Serial.print("SSID: ");
-  Serial.println(ssid);
-
-  Serial.print("Password: ");
-  Serial.println(WifiPassword);
-
-  // Menunggu koneksi ke WiFi
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(500);
@@ -47,50 +46,55 @@ void setup() {
   Serial.print("ESP32 IP Address: ");
   Serial.println(WiFi.localIP());
 
-  // Kirim data ke server setelah terhubung
+  // Kirim data ke server HTTP setelah terhubung
   int response_code = sendGreeting();
   if (response_code == 200) {
     Serial.println("Server responded with success.");
-    // Logic lanjutan bisa ditambahkan di sini
   } else {
     Serial.print("Response from server error with code: ");
     Serial.println(response_code);
   }
+
+  // Sambungkan WebSocket
+  connectWebSocket();
 }
 
 void loop() {
-  // Program utama bisa ditambahkan di sini
-
-  
+  if (!client.available()) {
+    Serial.println("WebSocket disconnected, reconnecting...");
+    connectWebSocket();
+  } else {
+    client.poll(); // Periksa pesan masuk
+    simulateSensorData();
+    delay(1000); // Kirim data setiap detik
+  }
 }
 
-int connectWebscoket () {
-  
-   // Hubungkan ke WebSocket server
-    if (client.connect(websocket_server)) {
-        Serial.println("Connected to WebSocket server!");
-        client.send("Hello from ESP32!"); // Kirim pesan ke server saat terkoneksi
-    } else {
-        Serial.println("WebSocket connection failed!");
-    }
+void connectWebSocket() {
+  Serial.print("Connecting to WebSocket: ");
+  Serial.println(websocket_server);
 
-    // Set callback untuk menangani pesan yang diterima
+  if (client.connect(websocket_server)) {
+    Serial.println("Connected to WebSocket server!");
+    client.send("Hello from ESP32!"); 
     client.onMessage(onMessageCallback);
-  
- 
- 
- }
+  } else {
+    Serial.println("WebSocket connection failed!");
+  }
+}
 
-
-
+void onMessageCallback(WebsocketsMessage message) {
+  Serial.print("Received Message: ");
+  Serial.println(message.data());
+}
 
 int sendGreeting() {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
-    http.begin(serverUrl);  // URL server
+    http.begin(serverUrl);  
     http.addHeader("Content-Type", "application/json");
 
-    String payload = "{\"device\":\"ESP32\",\"status\":\"connected\"}"; // Data JSON yang dikirim
+    String payload = "{\"device\":\"ESP32\",\"status\":\"connected\"}";
     int httpResponseCode = http.POST(payload);
 
     if (httpResponseCode > 0) {
@@ -105,17 +109,15 @@ int sendGreeting() {
     }
 
     http.end();
-    return httpResponseCode; // Mengembalikan response code
+    return httpResponseCode;
   } else {
     Serial.println("WiFi not connected");
-    return -1; // Kode error untuk koneksi WiFi gagal
+    return -1;
   }
 }
 
 void scanAvailableWifis() {
   Serial.println("Scanning available WiFi networks...");
-
-  // Mulai pemindaian jaringan WiFi
   int n = WiFi.scanNetworks();
   
   Serial.println("Scan completed.");
@@ -144,22 +146,38 @@ void scanAvailableWifis() {
       }
   }
   Serial.println("");
-
-  // Hapus hasil pemindaian untuk membebaskan memori
   WiFi.scanDelete();
 }
 
-
-
-
-
 void simulateSensorData() {
-
+    // Membuat timestamp saat ini
+    long timestamp = millis(); // Bisa diganti dengan waktu Unix jika tersedia
     
+    // Menggunakan variabel global, bukan mendeklarasikan ulang
+    voltage = random(210, 230) + random(0, 10) / 10.0;  // 210V - 230V
+    current = random(1, 5) + random(0, 10) / 10.0;      // 1A - 5A
+    power = voltage * current;                         // P = V x I
+    energy = random(1000, 5000) + random(0, 100) / 100.0; // 1000 - 5000 kWh
+    frequency = 50.0 + random(-5, 5) / 10.0;           // 49.5Hz - 50.5Hz
+    power_factor = 0.95 + random(0, 5) / 100.0;        // 0.95 - 0.99
 
-  
+    // Membuat JSON string
+    String jsonPayload = "{";
+    jsonPayload += "\"Tstamp\":" + String(timestamp) + ",";
+    jsonPayload += "\"Voltage\":" + String(voltage, 1) + ",";
+    jsonPayload += "\"Current\":" + String(current, 1) + ",";
+    jsonPayload += "\"Power\":" + String(power, 2) + ",";
+    jsonPayload += "\"Energy\":" + String(energy, 2) + ",";
+    jsonPayload += "\"Frequency\":" + String(frequency, 1) + ",";
+    jsonPayload += "\"Power_factor\":" + String(power_factor, 2);
+    jsonPayload += "}";
 
+    Serial.println("Sending data: " + jsonPayload);
 
-  
-  
-};
+    // Kirim data melalui WebSocket jika koneksi tersedia
+    if (client.available()) {
+        client.send(jsonPayload);
+    } else {
+        Serial.println("WebSocket not connected!");
+    }
+}
