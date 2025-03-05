@@ -8,21 +8,18 @@ const ws = new WebSocket(url);
 
 // Fungsi untuk mengirim data sensor
 const sendSensorData = () => {
-    const timestamp = Date.now(); // Menggunakan timestamp saat ini (epoch miliseconds)
+    const timestamp = new Date().toISOString(); // Gunakan format TIMESTAMPTZ (ISO 8601)
 
-    // Log timestamp dalam format lokal
-    const localDate = new Date(timestamp);
-    const localDateString = `${localDate.toLocaleDateString()} ${localDate.toLocaleTimeString()}`;
-    console.log("Timestamp (Local Time):", localDateString);
+    console.log("Timestamp (TIMESTAMPTZ):", timestamp);
 
     const sensorData = {
-        Tstamp: timestamp, // Mengirim timestamp epoch milidetik
-        Voltage: Math.random() * 10 + 210, // Randomkan nilai tegangan antara 210V - 220V
-        Current: Math.random() * 2 + 2, // Randomkan nilai arus antara 2A - 4A
-        Power: Math.random() * 100 + 500, // Randomkan nilai daya antara 500W - 600W
-        Energy: Math.random() * 1000 + 1000, // Randomkan energi antara 1000Wh - 2000Wh
-        Frequency: Math.random() * 5 + 45, // Randomkan frekuensi antara 45Hz - 50Hz
-        Power_factor: Math.random() * 0.1 + 0.9 // Randomkan faktor daya antara 0.9 - 1
+        Tstamp: timestamp, // Kirim timestamp dalam format TIMESTAMPTZ
+        Voltage: Math.random() * 10 + 210, 
+        Current: Math.random() * 2 + 2, 
+        Power: Math.random() * 100 + 500, 
+        Energy: Math.random() * 1000 + 1000, 
+        Frequency: Math.random() * 5 + 45, 
+        Power_factor: Math.random() * 0.1 + 0.9 
     };
 
     // Kirim data ke server WebSocket
@@ -36,8 +33,8 @@ const sendSensorData = () => {
 ws.on('open', () => {
     console.log('Connected to WebSocket server');
 
-    // Kirim data setiap 30 milidetik
-    setInterval(sendSensorData, 500); // Ganti interval menjadi 30 milidetik
+    // Kirim data setiap 500 milidetik
+    setInterval(sendSensorData, 500);
 });
 
 // Menangani error WebSocket
@@ -49,3 +46,4 @@ ws.on('error', (error) => {
 ws.on('close', () => {
     console.log('WebSocket connection closed');
 });
+

@@ -4,16 +4,20 @@
 
 using namespace websockets;
 
-const char* ssid = "hayolo";
-const char* WifiPassword = "qwerqwer";
-const char* serverUrl = "http://10.4.156.215:5001"; // Ganti dengan IP server
+// const char* ssid = "hayolo";
+// const char* WifiPassword = "qwerqwer";
+// const char* serverUrl = "http://10.4.156.215:5001"; // Ganti dengan IP server
+
+const char* ssid = "fh_b6sh379";
+const char* WifiPassword = "tigaempatlima345";
+const char* serverUrl = "http://192.168.1.5:5001"; // Ganti dengan IP server
 
 // Credential perangkat
 const char* deviceName = "device_i";
 const char* devicePassword = "qwerqwer";
 
 // URL WebSocket
-String websocket_server = "ws://10.4.156.215:5001/device-connect?name=" + String(deviceName) + "&password=" + String(devicePassword);
+String websocket_server = "ws://192.168.1.5:5001/device-connect?name=" + String(deviceName) + "&password=" + String(devicePassword);
 
 // Objek WebSocket
 WebsocketsClient client;
@@ -59,16 +63,23 @@ void setup() {
   connectWebSocket();
 }
 
+unsigned long lastReconnectAttempt = 0;
+
 void loop() {
   if (!client.available()) {
-    Serial.println("WebSocket disconnected, reconnecting...");
-    connectWebSocket();
+    unsigned long currentMillis = millis();
+    if (currentMillis - lastReconnectAttempt >= 5000) { // 5s delay
+      lastReconnectAttempt = currentMillis;
+      Serial.println("WebSocket disconnected, reconnecting...");
+      connectWebSocket();
+    }
   } else {
     client.poll(); // Periksa pesan masuk
     simulateSensorData();
     delay(1000); // Kirim data setiap detik
   }
 }
+
 
 void connectWebSocket() {
   Serial.print("Connecting to WebSocket: ");
