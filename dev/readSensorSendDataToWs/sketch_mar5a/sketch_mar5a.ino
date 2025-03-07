@@ -15,9 +15,9 @@ PZEM004Tv30 pzem(mySerial, PZEM_RX_PIN, PZEM_TX_PIN);
 // Sensor variable
 float voltage, current, power, energy, frequency, power_factor;
 
-const char* ssid = "fh_b6sh379";
-const char* WifiPassword = "tigaempatlima345";
-const char* serverUrl = "http://192.168.1.5:5001"; // Ganti dengan IP server
+const char* ssid = "hayolo";
+const char* WifiPassword = "qwerqwer";
+const char* serverUrl = "http://192.168.137.1:5001"; // Ganti dengan IP server
 
 // Credential perangkat
 const char* deviceName = "device_i";
@@ -26,7 +26,7 @@ const char* devicePassword = "qwerqwer";
 String reference_id = "";
 
 // URL WebSocket
-String websocket_server = "ws://192.168.1.5:5001/device-connect?name=" + String(deviceName) + "&password=" + String(devicePassword);
+String websocket_server = "ws://192.168.137.1:5001/device-connect?name=" + String(deviceName) + "&password=" + String(devicePassword);
 
 // Objek WebSocket
 WebsocketsClient client;
@@ -90,6 +90,7 @@ void setup() {
 
     while (WiFi.status() != WL_CONNECTED) {
         delay(1000);
+            //logger(DEBUG, "SETUP"i: " + .);
     }
 
     logger(INFO, "SETUP", "WiFi connected. IP Address: " + WiFi.localIP().toString());
@@ -118,6 +119,10 @@ void loop() {
         logger(DEBUG, reference_id, "-----------------------------------------");
         logger(DEBUG, reference_id, "Generated reference id: " + reference_id);
 
+
+        readSensorData(); 
+
+  
         if (!client.available()) {
             unsigned long reconnectMillis = millis();
             if (reconnectMillis - lastReconnectAttempt >= 5000) { // Reconnect setiap 5 detik
@@ -127,7 +132,6 @@ void loop() {
             }
         } else {
             client.poll(); // Periksa pesan WebSocket
-            readSensorData(); // Baca sensor dan kirim data
         }
     }
 }
@@ -141,7 +145,9 @@ void readSensorData() {
     frequency = pzem.frequency();
     power_factor = pzem.pf();
 
-    if (!isnan(voltage) && !isnan(current) && !isnan(power) && !isnan(energy) && !isnan(frequency) && !isnan(power_factor)) {
+    if (!isnan(voltage) && !isnan(current) && !isnan(power) 
+        && !isnan(energy) && !isnan(frequency) && !isnan(power_factor)) {
+        
         logger(INFO, reference_id, "Valid sensor data:");
         logger(INFO, reference_id, "Voltage: " + String(voltage, 2) + " V");
         logger(INFO, reference_id, "Current: " + String(current, 2) + " A");
@@ -150,24 +156,49 @@ void readSensorData() {
         logger(INFO, reference_id, "Frequency: " + String(frequency, 2) + " Hz");
         logger(INFO, reference_id, "Power Factor: " + String(power_factor));
 
+        // Hanya kirim data jika WebSocket terhubung
         if (client.available()) {
             sendSensorDataWebSocket(voltage, current, power, energy, frequency, power_factor);
+        } else {
+            logger(WARNING, reference_id, "WebSocket not connected. Data not sent.");
         }
     } else {
-        logger(ERROR, reference_id, "!!!! Error reading sensor data !!!!");
+        logger(ERROR, reference_id, "Error reading sensor data!");
     }
 }
 
-void scanAvailableWifis() {
-    logger(INFO, reference_id, "Scanning available WiFi networks...");
-    int n = WiFi.scanNetworks();
 
-    if (n == 0) {
-        logger(WARNING, reference_id, "No networks found.");
-    } else {
-        logger(INFO, reference_id, String(n) + " networks found.");
-    }
-    WiFi.scanDelete();
+void scanAvailableWifis() {
+  Serial.println("Scanning available WiFi networks...");
+  int n = WiFi.scanNetworks();
+  
+  Serial.println("Scan completed.");
+  if (n == 0) {
+      Serial.println("No networks found.");
+  } else {
+      Serial.printf("%d networks found:\n", n);
+      Serial.println("Nr | SSID                             | RSSI | CH | Encryption");
+      for (int i = 0; i < n; ++i) {
+          Serial.printf("%2d | %-32.32s | %4d | %2d | ", i + 1, WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.channel(i));
+          
+          switch (WiFi.encryptionType(i)) {
+              case WIFI_AUTH_OPEN: Serial.print("Open"); break;
+              case WIFI_AUTH_WEP: Serial.print("WEP"); break;
+              case WIFI_AUTH_WPA_PSK: Serial.print("WPA"); break;
+              case WIFI_AUTH_WPA2_PSK: Serial.print("WPA2"); break;
+              case WIFI_AUTH_WPA_WPA2_PSK: Serial.print("WPA+WPA2"); break;
+              case WIFI_AUTH_WPA2_ENTERPRISE: Serial.print("WPA2-EAP"); break;
+              case WIFI_AUTH_WPA3_PSK: Serial.print("WPA3"); break;
+              case WIFI_AUTH_WPA2_WPA3_PSK: Serial.print("WPA2+WPA3"); break;
+              case WIFI_AUTH_WAPI_PSK: Serial.print("WAPI"); break;
+              default: Serial.print("Unknown");
+          }
+          Serial.println();
+          delay(10);
+      }
+  }
+  Serial.println("");
+  WiFi.scanDelete();
 }
 
 int sendGreeting() {
