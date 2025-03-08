@@ -2,6 +2,7 @@
 #include <PZEM004Tv30.h>
 #include <EEPROM.h>
 #include <HTTPClient.h>
+#include <TimeLib.h> 
 
 
 /* WIFI MANAGER */
@@ -17,6 +18,13 @@ WiFiManager wm;  // Objek WiFiManager
 HardwareSerial mySerial(2); // Menggunakan UART2
 PZEM004Tv30 pzem(mySerial, PZEM_RX_PIN, PZEM_TX_PIN);
 
+
+// ignore 
+//int readSensorInterval = 1000; // default
+// String deviceName = "" ; 
+// String devicePassword = ""; 
+
+
 /* HTTP */
 const char* serverUrl = "http://192.168.1.5:5001";
 
@@ -26,7 +34,12 @@ const char* serverUrl = "http://192.168.1.5:5001";
 
 /* LOG */
 
-const String appVersion = "0.0.1";
+/* TODO :
+    get device name dan password
+
+*/
+
+const String appVersion = "0.0.2";
 const String appName = "SIMPEL_IOT";
 
 String reference_id = "";
@@ -46,28 +59,33 @@ void logger(String level, String reference_id, String message, String data = "")
         (level == ERROR)) {
 
         unsigned long timestamp = millis();
+        String logMsg;
+        logMsg.reserve(200);  // Alokasi awal untuk mengurangi alokasi ulang
 
-        Serial.print("[");
-        Serial.print(timestamp);
-        Serial.print("] - ");
-        Serial.print(appName);
-        Serial.print(" v");
-        Serial.print(appVersion);
-        Serial.print(" - ");
-        Serial.print(reference_id);
-        Serial.print(" - ");
-        Serial.print(level);
-        Serial.print(" - ");
-        Serial.print(message);
+        logMsg += "[";
+        logMsg += timestamp;
+        logMsg += "] - ";
+        logMsg += appName;
+        logMsg += " - ";
+        logMsg += appVersion;
+        logMsg += " - ";
+        logMsg += reference_id;
+        logMsg += " - ";
+        logMsg += level;
+        logMsg += " - ";
+        logMsg += message;
 
         if (data.length() > 0) {
-            Serial.print(" - ");
-            Serial.print(data);
+            logMsg += " - ";
+            logMsg += data;
         }
 
-        Serial.println();
+        Serial.println(logMsg);
+        
+        logMsg = ""; // Kosongkan untuk membebaskan memori
     }
 }
+
 
 
 String generateReferenceId() {
@@ -86,9 +104,9 @@ String generateReferenceId() {
     return refId;
 }
 
-bool wifiSetup(String reference_id, String ssid, String password);
-void saveWiFiCredentials(String reference_id, String ssid, String password);
-void readWiFiCredentials(String reference_id, String &ssid, String &password);
+bool wifiSetup(String reference_id, String ssid, String wifi_password);
+void saveWiFiCredentials(String reference_id, String ssid, String wifi_password);
+void readWiFiCredentials(String reference_id, String &ssid, String &wifi_password);
 void readSensorData();
 
 void setup() {
@@ -98,10 +116,10 @@ void setup() {
   reference_id = "MAIN";
   logger(INFO, reference_id, "Memulai ESP32...");
 
-  String ssid, password;
-  readWiFiCredentials(reference_id, ssid, password);
+  String ssid, wifi_password;
+  readWiFiCredentials(reference_id, ssid, wifi_password);
 
-  bool connected = wifiSetup(reference_id, ssid, password);
+  bool connected = wifiSetup(reference_id, ssid, wifi_password);
   if (connected) {
     logger(INFO, reference_id, "CONNECTED TO INTERNET");
 
@@ -124,22 +142,24 @@ void loop() {
   unsigned long currentMillis = millis();
 
   if (currentMillis - previousMillis >= interval) {
+
+    logger(DEBUG, reference_id, "Free heap: " + String(ESP.getFreeHeap()) + "byte");
     previousMillis = currentMillis;
 
     reference_id = generateReferenceId();
-    logger(DEBUG, reference_id, "-----------------------------------------");
-    logger(DEBUG, reference_id, "Generated reference id: " + reference_id);
+    
+    logger(DEBUG, reference_id, "===== Generated reference id: " + reference_id + " =====");
 
     readSensorData();
   }
 }
 
 // 🔹 **Perbaikan `wifiSetup()` dengan return boolean**
-bool wifiSetup(String reference_id, String ssid, String password) {
-  if (ssid.length() < 1) {
+bool wifiSetup(String reference_id, String ssid, String wifi_password) {
+  if (ssid.length() < 1 || wifi_password.length() < 1) {
     logger(WARNING, reference_id, "SSID tidak ditemukan, masuk ke mode konfigurasi...");
 
-    if (!wm.autoConnect("ESP32_Config")) {
+    if (!wm.autoConnect("SIMPEL CONFIGURATION")) {
       logger(ERROR, reference_id, "Gagal connect, restart ESP32...");
       delay(3000);
       ESP.restart();
@@ -150,7 +170,7 @@ bool wifiSetup(String reference_id, String ssid, String password) {
     return true;
   }
 
-  WiFi.begin(ssid.c_str(), password.c_str());
+  WiFi.begin(ssid.c_str(), wifi_password.c_str());
   logger(INFO, reference_id, "Menghubungkan ke WiFi: " + ssid);
 
   int timeout = 15;
@@ -176,21 +196,21 @@ bool wifiSetup(String reference_id, String ssid, String password) {
   }
 }
 
-void saveWiFiCredentials(String reference_id, String ssid, String password) {
+void saveWiFiCredentials(String reference_id, String ssid, String wifi_password) {
   logger(INFO, reference_id, "Menyimpan SSID & Password ke EEPROM...");
 
   EEPROM.begin(EEPROM_SIZE);
 
   for (int i = 0; i < 48; i++) {
     EEPROM.write(SSID_ADDR + i, i < ssid.length() ? ssid[i] : 0);
-    EEPROM.write(PASS_ADDR + i, i < password.length() ? password[i] : 0);
+    EEPROM.write(PASS_ADDR + i, i < wifi_password.length() ? wifi_password[i] : 0);
   }
 
   EEPROM.commit();
   logger(EVENT, reference_id, "SSID & Password tersimpan!");
 }
 
-void readWiFiCredentials(String reference_id, String &ssid, String &password) {
+void readWiFiCredentials(String reference_id, String &ssid, String &wifi_password) {
   logger(INFO, reference_id, "Membaca SSID & Password dari EEPROM...");
 
   EEPROM.begin(EEPROM_SIZE);
@@ -203,7 +223,7 @@ void readWiFiCredentials(String reference_id, String &ssid, String &password) {
     passBuf[i] = EEPROM.read(PASS_ADDR + i);
   }
   ssid = String(ssidBuf);
-  password = String(passBuf);
+  wifi_password = String(passBuf);
 
   logger(INFO, reference_id, "SSID: " + ssid);
 }
@@ -218,9 +238,16 @@ void readSensorData() {
   frequency = pzem.frequency();
   power_factor = pzem.pf();
 
+  // Format timestamp
+  char timestamp[20];
+  snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d %02d:%02d:%02d",
+           year(), month(), day(), hour(), minute(), second());
+
   if (!isnan(voltage) && !isnan(current) && !isnan(power) &&
       !isnan(energy) && !isnan(frequency) && !isnan(power_factor)) {
     
+    logger(INFO, reference_id, "-------------------------------------:");
+    logger(INFO, reference_id, String("Tstamp: ") + timestamp);
     logger(INFO, reference_id, "Valid sensor data:");
     logger(INFO, reference_id, "Voltage: " + String(voltage, 2) + " V");
     logger(INFO, reference_id, "Current: " + String(current, 2) + " A");
@@ -228,8 +255,11 @@ void readSensorData() {
     logger(INFO, reference_id, "Energy: " + String(energy, 2) + " kWh");
     logger(INFO, reference_id, "Frequency: " + String(frequency, 2) + " Hz");
     logger(INFO, reference_id, "Power Factor: " + String(power_factor));
+    logger(INFO, reference_id, "-------------------------------------:");
   } else {
+    logger(INFO, reference_id, "-------------------------------------:");
     logger(ERROR, reference_id, "Error reading sensor data!");
+    logger(INFO, reference_id, "-------------------------------------:");
   }
 }
 
@@ -240,21 +270,32 @@ int sendGreeting() {
         http.begin(serverUrl);
         http.addHeader("Content-Type", "application/json");
 
-        String payload = "{\"device\":\"ESP32\",\"status\":\"connected\"}";
+        // Gunakan reserve untuk mengurangi fragmentasi heap
+        String payload;
+        payload.reserve(50);  
+        payload = "{\"device\":\"ESP32\",\"status\":\"connected\"}";
+
         int httpResponseCode = http.POST(payload);
 
         if (httpResponseCode > 0) {
-            String response = http.getString();
+            String response;
+            response.reserve(100);  // Alokasi memori sebelum digunakan
+            response = http.getString();
             logger(INFO, reference_id, "Response code: " + String(httpResponseCode));
             logger(INFO, reference_id, "Response body: " + response);
+            
+            response = ""; // Kosongkan untuk membebaskan memori
         } else {
             logger(ERROR, reference_id, "Error sending POST request: " + String(httpResponseCode));
         }
 
-        http.end();
+        http.end(); // Pastikan HTTPClient ditutup untuk membebaskan memori
+        payload = ""; // Kosongkan payload untuk menghindari memory leak
+
         return httpResponseCode;
     } else {
         logger(ERROR, reference_id, "WiFi not connected");
         return -1;
     }
 }
+
