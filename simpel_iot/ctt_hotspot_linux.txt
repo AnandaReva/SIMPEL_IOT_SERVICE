@@ -1,0 +1,5 @@
+// create hotstpoy with 2,4 mhz
+sudo create_ap --freq 2.4 wlo1 wlo1 "Hotspot_Test" "qwerqwer"
+
+//show available conn
+nmcli connection show

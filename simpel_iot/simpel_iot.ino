@@ -3,6 +3,7 @@
 #include <EEPROM.h>
 #include <HTTPClient.h>
 #include <TimeLib.h> 
+#include <NTPClient.h>
 
 
 /* WIFI MANAGER */
@@ -17,6 +18,12 @@ WiFiManager wm;  // Objek WiFiManager
 
 HardwareSerial mySerial(2); // Menggunakan UART2
 PZEM004Tv30 pzem(mySerial, PZEM_RX_PIN, PZEM_TX_PIN);
+
+
+// Konfigurasi NTP untuk waktu UTC
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000);  // Gunakan UTC (offset 0)
+
 
 
 // ignore 
@@ -39,7 +46,7 @@ const char* serverUrl = "http://192.168.1.5:5001";
 
 */
 
-const String appVersion = "0.0.2";
+const String appVersion = "0.0.3";
 const String appName = "SIMPEL_IOT";
 
 String reference_id = "";
@@ -228,9 +235,22 @@ void readWiFiCredentials(String reference_id, String &ssid, String &wifi_passwor
   logger(INFO, reference_id, "SSID: " + ssid);
 }
 
+String getTimestamp() {
+    timeClient.update();
+    time_t epochTime = timeClient.getEpochTime();
+    
+    char buffer[25];
+    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d",
+             year(epochTime), month(epochTime), day(epochTime),
+             hour(epochTime), minute(epochTime), second(epochTime));
+    
+    return String(buffer);
+}
+
+
 void readSensorData() {
   float voltage, current, power, energy, frequency, power_factor;
-
+''
   voltage = pzem.voltage();
   current = pzem.current();
   power = pzem.power();
@@ -238,16 +258,14 @@ void readSensorData() {
   frequency = pzem.frequency();
   power_factor = pzem.pf();
 
-  // Format timestamp
-  char timestamp[20];
-  snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d %02d:%02d:%02d",
-           year(), month(), day(), hour(), minute(), second());
+  // Deklarasikan variabel timestamp
+  String timestamp = getTimestamp();
 
   if (!isnan(voltage) && !isnan(current) && !isnan(power) &&
       !isnan(energy) && !isnan(frequency) && !isnan(power_factor)) {
     
     logger(INFO, reference_id, "-------------------------------------:");
-    logger(INFO, reference_id, String("Tstamp: ") + timestamp);
+    logger(INFO, reference_id, "Tstamp: " + timestamp);
     logger(INFO, reference_id, "Valid sensor data:");
     logger(INFO, reference_id, "Voltage: " + String(voltage, 2) + " V");
     logger(INFO, reference_id, "Current: " + String(current, 2) + " A");

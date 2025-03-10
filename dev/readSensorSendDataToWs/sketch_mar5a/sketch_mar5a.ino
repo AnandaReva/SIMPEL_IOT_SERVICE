@@ -149,12 +149,12 @@ void readSensorData() {
         && !isnan(energy) && !isnan(frequency) && !isnan(power_factor)) {
         
         logger(INFO, reference_id, "Valid sensor data:");
-        logger(INFO, reference_id, "Voltage: " + String(voltage, 2) + " V");
-        logger(INFO, reference_id, "Current: " + String(current, 2) + " A");
-        logger(INFO, reference_id, "Power: " + String(power, 2) + " W");
-        logger(INFO, reference_id, "Energy: " + String(energy, 2) + " kWh");
-        logger(INFO, reference_id, "Frequency: " + String(frequency, 2) + " Hz");
-        logger(INFO, reference_id, "Power Factor: " + String(power_factor));
+        logger(DEBUG, reference_id, "Voltage: " + String(voltage, 2) + " V");
+        logger(DEBUG, reference_id, "Current: " + String(current, 2) + " A");
+        logger(DEBUG, reference_id, "Power: " + String(power, 2) + " W");
+        logger(DEBUG, reference_id, "Energy: " + String(energy, 2) + " kWh");
+        logger(DEBUG, reference_id, "Frequency: " + String(frequency, 2) + " Hz");
+        logger(DEBUG, reference_id, "Power Factor: " + String(power_factor));
 
         // Hanya kirim data jika WebSocket terhubung
         if (client.available()) {
