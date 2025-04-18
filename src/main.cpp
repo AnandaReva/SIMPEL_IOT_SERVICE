@@ -1,0 +1,224 @@
+/**
+ * @file main.cpp
+ * !!! DONT DELETE COMMENTS
+ *
+ */
+
+/* ✅ Startup Flow
+Open WiFi Manager
+1.1 If connection is successful:
+    → Assign and save device credentials (WiFi + device info).
+1.2 If connection fails:
+    → Repeat the process until success.
+
+Fetch Device Data (getDeviceData)
+2.1 If successful:
+    → Assign the received data to deviceData.
+2.2 If it fails:
+    a. Retry a limited number of times.
+    b. If still failing → reopen WiFi Manager (go back to step 1).
+
+Read and Send Sensor Data
+3.1 If deviceData is available:
+    a. Read sensor values.
+    b. Add deviceId and timestamp to the payload.
+    c. Send the message to the server.
+
+Connect to WebSocket
+4.1 If connection is successful:
+    → Continue normal operation.
+4.2 If connection fails:
+    a. Retry a limited number of times.
+    b. If still failing:
+        → Remove any WebSocket connection.
+        → Reopen WiFi Manager (go back to step 1).
+
+ */
+/* 🔄 Device Data Update via WebSocket
+Receive WebSocket message with type update
+→ Message contains instruction to update the device data.
+
+Re-fetch Device Data using deviceId
+2.1 If successful:
+    → Assign the updated data to deviceData.
+2.2 If it fails:
+    a. Retry a limited number of times.
+    b. If still failing:
+        → Remove WebSocket connection.
+        → Reopen WiFi Manager (go back to Startup Flow step 1).
+
+ */
+
+#include <Arduino.h>
+#include <WiFiManager.h>
+#include <PZEM004Tv30.h>
+#include <HTTPClient.h>
+#include <TimeLib.h>
+#include <NTPClient.h>
+#include <ArduinoWebsockets.h>
+#include <ArduinoJson.h>
+#include <string>
+
+#include "logger.h"
+#include "globalVar.h"
+#include "openWiFiManager.h"
+#include "generateRandStr.h"
+#include "getDeviceData.h"
+#include "websocketConn.h"
+#include "pzem004t.h"
+
+bool isDisableLoop = true;
+bool isConnectedToWifi = false;
+
+// Function prototypes
+void onWebSocketOpen();
+void onWebSocketClose();
+
+void watchWebSocketStatus()
+{
+    ws.onEvent([](websockets::WebsocketsEvent event, String data)
+               {
+         switch (event){
+         case websockets::WebsocketsEvent::ConnectionOpened:
+             onWebSocketOpen();
+             break;
+         case websockets::WebsocketsEvent::ConnectionClosed:
+             onWebSocketClose();
+             break;
+         default:
+             {std::string referenceId = generateRandStr(8);
+                 LogWarning(referenceId, "WEBSOCKET - Unknown event");
+             }
+             break;
+         } });
+}
+
+void startupFlow()
+{
+    SetReferenceId("SETUP");
+    LogInfo(GetReferenceId(), "---- STARTING DEVICE -----");
+
+    const int maxStartupAttempts = 3;
+    int attempt = 0;
+
+start_wifi:
+    // Step 1: Open WiFi Manager
+    attempt++;
+    if (attempt > maxStartupAttempts)
+    {
+        LogError(GetReferenceId(), "❌ All startup attempts failed. Restarting device...");
+        ESP.restart();
+    }
+
+    LogInfo(GetReferenceId(), "Startup Attempt #" + std::to_string(attempt));
+    openWiFiManager(GetReferenceId());
+
+    // Step 2: Fetch device data
+    int getDataTryCount = 0;
+    bool isDataReceived = false;
+
+fetch_data:
+    getDataTryCount++;
+    if (getDataTryCount > 3)
+    {
+        LogError(GetReferenceId(), "❌ Failed to get device data. Retrying startup flow...");
+        delay(5000);
+        goto start_wifi;
+    }
+
+    LogInfo(GetReferenceId(), "Trying to get device data... Attempt #" + std::to_string(getDataTryCount));
+    delay(2000);
+    isDataReceived = getDeviceData(GetReferenceId());
+
+    if (!isDataReceived)
+    {
+        goto fetch_data;
+    };
+
+    // Step 3: Connect to WebSocket
+
+    connectWebSocket(GetReferenceId());
+
+    // Step 4: Watch WebSocket status
+    watchWebSocketStatus();
+
+    LogInfo(GetReferenceId(), "✅ Startup successful!");
+}
+
+void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
+{
+    LogWarning("onWiFiDisconnected", " - WIFI DISCONNECTED!!!");
+    isConnectedToWifi = false;
+    isDisableLoop = true;
+};
+
+void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info)
+{
+    LogDebug("onWiFiConnected", " - WIFI IS CONNECTED!!!");
+    LogDebug("onWiFiConnected", "IP ADD : ", std::string(WiFi.localIP().toString().c_str()));
+    isConnectedToWifi = true;
+    isDisableLoop = false;
+}
+
+void onWebSocketOpen()
+{
+    std::string referenceId = generateRandStr(8);
+    LogInfo(referenceId, "WEBSOCKET - Connection opened");
+    isDisableLoop = false;
+}
+
+void onWebSocketClose()
+{
+    static int wsFailCount = 0;
+    wsFailCount++;
+
+    std::string referenceId = generateRandStr(8);
+    LogWarning(referenceId, "WEBSOCKET - Connection closed");
+    isDisableLoop = true;
+
+    if (wsFailCount >= 3)
+    {
+        LogError(referenceId, "❌ WebSocket repeatedly failed. Restarting flow...");
+        wsFailCount = 0;
+        startupFlow();
+    }
+}
+
+const int baudRate = 115200;
+
+void setup()
+{
+    Serial.begin(baudRate);
+    delay(1000);
+    WiFi.onEvent(onWiFiConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
+    WiFi.onEvent(onWiFiDisconnected);
+    startupFlow();
+};
+
+unsigned long currentMillis = millis();
+unsigned long previousMillis = 0;
+
+void loop()
+{
+    if (!isDisableLoop && isConnectedToWifi)
+    {
+        ws.poll();
+
+        currentMillis = millis();
+
+        if (currentMillis - previousMillis >= GetReadInterval())
+        {
+            previousMillis = currentMillis;
+            SetReferenceId(generateRandStr(8));
+
+            LogDebug(GetReferenceId(), "===== Generated reference id: " + GetReferenceId() + " =====");
+            LogDebug(GetReferenceId(), "Free heap: " + std::string(String(ESP.getFreeHeap()).c_str()) + " byte");
+
+            readPzem004T(GetReferenceId());
+        }
+        else
+        {
+            delay(1000); 
+        }
+    }
+}
