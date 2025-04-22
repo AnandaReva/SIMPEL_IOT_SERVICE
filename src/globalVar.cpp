@@ -13,7 +13,7 @@
 #include <HTTPClient.h>
 
 std::string appName = "SIMPEL_DEVICE_SC";
-std::string appVersion = "0.1.1";
+std::string appVersion = "0.1.2";
 
 std::string serverUrl = "http://10.4.157.103:5001";
 std::string websocketUrl = "ws://10.4.157.103:5001/device-connect";
@@ -62,14 +62,27 @@ std::string GetWebsocketUrl()
     return websocketUrl;
 }
 /* --------- DEVICE INFO ---------- */
-std::string GetDevicePassword()
+unsigned long GetDeviceId()
 {
-    return deviceInfo.devicePassword;
+    return deviceInfo.deviceId;
 }
+
 std::string GetDeviceName()
 {
     return deviceInfo.deviceName;
 }
+std::string GetDevicePassword()
+{
+    return deviceInfo.devicePassword;
+}
+
+unsigned long GetReadInterval()
+{
+    return deviceInfo.readInterval;
+}
+
+
+
 
 std::string GetWifiSSID()
 {
@@ -78,10 +91,6 @@ std::string GetWifiSSID()
 std::string GetWifiPassword()
 {
     return deviceInfo.wifiPassword;
-}
-unsigned long GetReadInterval()
-{
-    return deviceInfo.readInterval;
 }
 
 /* --------- SENSOR DATA ---------- */
@@ -123,6 +132,10 @@ void SetReferenceId(const std::string &referenceId)
 {
 }
 /* --------- DEVICE INFO ---------- */
+void SetDeviceId(unsigned long deviceId)
+{
+    deviceInfo.deviceId = deviceId;
+}
 void SetDeviceName(const std::string &name)
 {
     deviceInfo.deviceName = name;

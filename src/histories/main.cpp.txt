@@ -65,7 +65,6 @@ Re-fetch Device Data using deviceId
 #include "generateRandStr.h"
 #include "getDeviceData.h"
 #include "websocketConn.h"
-#include "sendSensorData.h"
 #include "pzem004t.h"
 
 bool isDisableLoop = true;
@@ -93,15 +92,57 @@ void watchWebSocketStatus()
              break;
          } });
 }
+
 void startupFlow()
 {
     SetReferenceId("SETUP");
     LogInfo(GetReferenceId(), "---- STARTING DEVICE -----");
 
-    startWiFiAndGetDeviceData();
-    tryConnectWebSocket();
+    const int maxStartupAttempts = 3;
+    int attempt = 0;
 
-    isDisableLoop = false;
+start_wifi:
+    // Step 1: Open WiFi Manager
+    attempt++;
+    if (attempt > maxStartupAttempts)
+    {
+        LogError(GetReferenceId(), "❌ All startup attempts failed. Restarting device...");
+        ESP.restart();
+    }
+
+    LogInfo(GetReferenceId(), "Startup Attempt #" + std::to_string(attempt));
+    openWiFiManager(GetReferenceId());
+
+    // Step 2: Fetch device data
+    int getDataTryCount = 0;
+    bool isDataReceived = false;
+
+fetch_data:
+    getDataTryCount++;
+    if (getDataTryCount > 3)
+    {
+        LogError(GetReferenceId(), "❌ Failed to get device data. Reopening WiFi Manager...");
+        WiFi.disconnect(true);
+        delay(1000);
+        goto start_wifi;
+    }
+
+    LogInfo(GetReferenceId(), "Trying to get device data... Attempt #" + std::to_string(getDataTryCount));
+    delay(2000);
+    isDataReceived = getDeviceData(GetReferenceId());
+
+    if (!isDataReceived)
+    {
+        goto fetch_data;
+    };
+
+    // Step 3: Connect to WebSocket
+
+    connectWebSocket(GetReferenceId());
+
+    // Step 4: Watch WebSocket status
+    watchWebSocketStatus();
+
     LogInfo(GetReferenceId(), "✅ Startup successful!");
 }
 
@@ -142,91 +183,14 @@ void onWebSocketClose()
         wsFailCount = 0;
         WiFi.disconnect(true);
         delay(1000);
-        startupFlow();
+        startupFlow(); // Akan masuk ke WiFi manager ulang
     }
 }
 
-void startWiFiAndGetDeviceData()
-{
-    const int maxStartupAttempts = 3;
-    const int maxGetDataAttempts = 3;
-
-    int startupAttempt = 0;
-
-    while (startupAttempt < maxStartupAttempts)
-    {
-        startupAttempt++;
-        SetReferenceId("SETUP");
-        LogInfo(GetReferenceId(), "Startup Attempt #" + std::to_string(startupAttempt));
-
-        // Step 1: Buka WiFi Manager
-        openWiFiManager(GetReferenceId());
-
-        // Step 2: Ambil data perangkat
-        int getDataTryCount = 0;
-        bool isDataReceived = false;
-
-        while (getDataTryCount < maxGetDataAttempts)
-        {
-            getDataTryCount++;
-            LogInfo(GetReferenceId(), "Trying to get device data... Attempt #" + std::to_string(getDataTryCount));
-            delay(2000);
-
-            isDataReceived = getDeviceData(GetReferenceId());
-            if (isDataReceived)
-                break;
-        }
-
-        if (isDataReceived)
-        {
-            LogInfo(GetReferenceId(), "✅ Device data retrieved successfully");
-            return; // Lanjut ke WebSocket
-        }
-
-        LogError(GetReferenceId(), "❌ Failed to get device data. Reopening WiFi Manager...");
-        WiFi.disconnect(true); // Reset koneksi WiFi
-        delay(1000);
-    }
-
-    LogError(GetReferenceId(), "❌ All startup attempts failed. Restarting device...");
-    ESP.restart();
-}
-
-void tryConnectWebSocket()
-{
-    const int maxWebSocketAttempts = 3;
-    int wsFailCount = 0;
-
-    while (wsFailCount < maxWebSocketAttempts)
-    {
-        SetReferenceId("WS" + std::to_string(wsFailCount + 1));
-        connectWebSocket(GetReferenceId());
-        watchWebSocketStatus();
-
-        // Tunggu sebentar, asumsi kita tunggu koneksi terbuka
-        delay(2000);
-
-        if (ws.available())
-        {
-            LogInfo(GetReferenceId(), "✅ WebSocket connected successfully");
-            return;
-        }
-
-        LogWarning(GetReferenceId(), "WebSocket connection failed");
-        wsFailCount++;
-        ws.close();
-    }
-
-    LogError(GetReferenceId(), "❌ WebSocket repeatedly failed. Reopening WiFi Manager...");
-    WiFi.disconnect(true);
-    delay(1000);
-    startWiFiAndGetDeviceData();
-    tryConnectWebSocket(); // Coba ulang lagi
-}
+const int baudRate = 115200;
 
 void setup()
 {
-    const int baudRate = 115200;
     Serial.begin(baudRate);
     delay(1000);
     WiFi.onEvent(onWiFiConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
@@ -253,12 +217,7 @@ void loop()
             LogDebug(GetReferenceId(), "===== Generated reference id: " + GetReferenceId() + " =====");
             LogDebug(GetReferenceId(), "Free heap: " + std::string(String(ESP.getFreeHeap()).c_str()) + " byte");
 
-            bool isDataValid = readPzem004T(GetReferenceId());
-            if (isDataValid)
-            {
-                LogInfo(referenceId, "Sensor data is valid, send to server: ");
-                sendSensorData(GetReferenceId());
-            }
+            readPzem004T(GetReferenceId());
         }
         else
         {

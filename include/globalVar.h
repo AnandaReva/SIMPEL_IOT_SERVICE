@@ -67,6 +67,7 @@ std::string GetReferenceId();
 std::string GetAppName();
 std::string GetAppVersion();
 
+unsigned long GetDeviceId();
 std::string GetDeviceName();
 std::string GetDevicePassword();
 std::string GetWifiSSID();
@@ -83,6 +84,9 @@ std::string GetReadTstamp();
 
 // Setter
 void SetReferenceId(const std::string &);
+
+
+void SetDeviceId(unsigned long);
 void SetDeviceName(const std::string &);
 void SetDevicePassword(const std::string &);
 void SetWifiSSID(const std::string &); 

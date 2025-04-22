@@ -86,6 +86,8 @@ bool getDeviceData(const std::string &referenceId)
             return false;
         }
 
+        unsigned long deviceId = doc["Payload"]["device_data"]["device_id"];
+
         int readInterval = doc["Payload"]["device_data"]["device_read_interval"];
         if (readInterval <= 0 || readInterval > 120)
         {
@@ -95,11 +97,11 @@ bool getDeviceData(const std::string &referenceId)
 
         // Simpan ke variabel global
         SetReadInterval(readInterval * 1000);
-        deviceInfo.deviceId = doc["Payload"]["device_data"]["device_id"];
+        SetDeviceId(deviceId);
 
         LogInfo(referenceId, "getDeviceData - Success. device_id: " +
-                                 std::to_string(deviceInfo.deviceId) + ", read_interval: " +
-                                 std::to_string(deviceInfo.readInterval) + " ms");
+                                 std::to_string(GetDeviceId()) + ", read_interval: " +
+                                 std::to_string(GetReadInterval()) + " ms");
 
         http.end();
         return true;
