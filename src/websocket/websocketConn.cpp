@@ -6,6 +6,26 @@
 
 using namespace websockets;
 
+/* exp ping pong message for checking  : 
+
+    device : {
+        "type": "ping",
+        "device_id": 1,
+    }
+    server : {
+        "type": "pong",
+        "device_id": 1,
+    } 
+
+    // device wait 5 seconds
+    // repeat ping and pong
+
+
+    // if server dont receive ping message for 5 seconds * 3 times
+    // server disconnect ws
+
+*/
+
 void connectWebSocket(const std::string &referenceId)
 {
 
@@ -17,6 +37,10 @@ void connectWebSocket(const std::string &referenceId)
     websocketUrl += "?name=" +GetDeviceName() + "&password=" + GetDevicePassword();
 
     LogDebug(referenceId, "Complete WebSocket server URL: " + websocketUrl);
+
+
+    // send ping  message
+    
     
     ws.onMessage([referenceId](WebsocketsMessage message){
         LogInfo(referenceId, "WEBSOCKET - Received message: " + std::string(message.data().c_str()));
@@ -38,7 +62,8 @@ void connectWebSocket(const std::string &referenceId)
             return;
         }
 
-        if (strcmp(type, "update") != 0 &&
+        if (
+            strcmp(type, "update") != 0 &&
             strcmp(type, "restart") != 0 &&
             strcmp(type, "deep_sleep") != 0)
         {

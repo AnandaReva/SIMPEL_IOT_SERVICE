@@ -74,6 +74,7 @@ bool isConnectedToWifi = false;
 // Function prototypes
 void onWebSocketOpen();
 void onWebSocketClose();
+void startupFlow();
 
 void watchWebSocketStatus()
 {
@@ -92,58 +93,6 @@ void watchWebSocketStatus()
              }
              break;
          } });
-}
-void startupFlow()
-{
-    SetReferenceId("SETUP");
-    LogInfo(GetReferenceId(), "---- STARTING DEVICE -----");
-
-    startWiFiAndGetDeviceData();
-    tryConnectWebSocket();
-
-    isDisableLoop = false;
-    LogInfo(GetReferenceId(), "✅ Startup successful!");
-}
-
-void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
-{
-    LogWarning("onWiFiDisconnected", " - WIFI DISCONNECTED!!!");
-    isConnectedToWifi = false;
-    isDisableLoop = true;
-};
-
-void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info)
-{
-    LogDebug("onWiFiConnected", " - WIFI IS CONNECTED!!!");
-    LogDebug("onWiFiConnected", "IP ADD : ", std::string(WiFi.localIP().toString().c_str()));
-    isConnectedToWifi = true;
-    isDisableLoop = false;
-}
-
-void onWebSocketOpen()
-{
-    std::string referenceId = generateRandStr(8);
-    LogInfo(referenceId, "WEBSOCKET - Connection opened");
-    isDisableLoop = false;
-}
-
-void onWebSocketClose()
-{
-    static int wsFailCount = 0;
-    wsFailCount++;
-
-    std::string referenceId = generateRandStr(8);
-    LogWarning(referenceId, "WEBSOCKET - Connection closed");
-    isDisableLoop = true;
-
-    if (wsFailCount >= 3)
-    {
-        LogError(referenceId, "❌ WebSocket repeatedly failed. Reopening WiFi Manager...");
-        wsFailCount = 0;
-        WiFi.disconnect(true);
-        delay(1000);
-        startupFlow();
-    }
 }
 
 void startWiFiAndGetDeviceData()
@@ -200,28 +149,83 @@ void tryConnectWebSocket()
     while (wsFailCount < maxWebSocketAttempts)
     {
         SetReferenceId("WS" + std::to_string(wsFailCount + 1));
+
         connectWebSocket(GetReferenceId());
-        watchWebSocketStatus();
+        watchWebSocketStatus();   // <— panggil di sini tiap kali connect
 
-        // Tunggu sebentar, asumsi kita tunggu koneksi terbuka
         delay(2000);
-
         if (ws.available())
         {
             LogInfo(GetReferenceId(), "✅ WebSocket connected successfully");
+            isDisableLoop = false;
             return;
         }
 
-        LogWarning(GetReferenceId(), "WebSocket connection failed");
         wsFailCount++;
         ws.close();
+        LogWarning(GetReferenceId(), "WebSocket connection failed, retrying...");
     }
 
+    // Kalau 3x gagal
     LogError(GetReferenceId(), "❌ WebSocket repeatedly failed. Reopening WiFi Manager...");
     WiFi.disconnect(true);
     delay(1000);
+    startupFlow();
+}
+
+void startupFlow()
+{
+    SetReferenceId("SETUP");
+    LogInfo(GetReferenceId(), "---- STARTING DEVICE -----");
+
     startWiFiAndGetDeviceData();
-    tryConnectWebSocket(); // Coba ulang lagi
+    tryConnectWebSocket();
+
+    isDisableLoop = false;
+    isConnectedToWifi = true;
+
+    LogInfo(GetReferenceId(), "✅ Startup successful!");
+}
+
+void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
+{
+    LogWarning("onWiFiDisconnected", " - WIFI DISCONNECTED!!!");
+    isConnectedToWifi = false;
+    isDisableLoop = true;
+};
+
+void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info)
+{
+    LogDebug("onWiFiConnected", " - WIFI IS CONNECTED!!!");
+    LogDebug("onWiFiConnected", "IP ADD : ", std::string(WiFi.localIP().toString().c_str()));
+    isConnectedToWifi = true;
+    isDisableLoop = false;
+}
+
+void onWebSocketOpen()
+{
+    std::string referenceId = generateRandStr(8);
+    LogInfo(referenceId, "WEBSOCKET - Connection opened");
+    isDisableLoop = false;
+}
+
+void onWebSocketClose()
+{
+    static int wsFailCount = 0;
+    wsFailCount++;
+
+    std::string referenceId = generateRandStr(8);
+    LogWarning(referenceId, "WEBSOCKET - Connection closed");
+    isDisableLoop = true;
+
+    if (wsFailCount >= 3)
+    {
+        LogError(referenceId, "❌ WebSocket repeatedly failed. Reopening WiFi Manager...");
+        wsFailCount = 0;
+        WiFi.disconnect(true);
+        delay(1000);
+        startupFlow();
+    }
 }
 
 void setup()
@@ -232,15 +236,48 @@ void setup()
     WiFi.onEvent(onWiFiConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
     WiFi.onEvent(onWiFiDisconnected);
     startupFlow();
+
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        isConnectedToWifi = true;
+    }
+
+    LogDebug(GetReferenceId(), "SETUP COMPLETED. IsDisableLoop: " + std::to_string(isDisableLoop));
+    LogDebug(GetReferenceId(), "isConnectedToWifi: " + std::to_string(isConnectedToWifi));
 };
 
 unsigned long currentMillis = millis();
 unsigned long previousMillis = 0;
 
+static const unsigned long PING_INTERVAL = 5000;
+static unsigned long lastPingMillis = 0;
 void loop()
 {
     if (!isDisableLoop && isConnectedToWifi)
     {
+
+
+        unsigned long now = millis();
+
+        // 1) Kirim ping secara periodik
+        if (ws.available() && now - lastPingMillis >= PING_INTERVAL) {
+            lastPingMillis = now;
+    
+            // Bangun pesan ping
+            StaticJsonDocument<128> pingDoc;
+            pingDoc["type"] = "ping";
+            pingDoc["device_id"] = GetDeviceId();
+
+            LogDebug(GetReferenceId(), "WEBSOCKET - Sending ping");
+    
+            std::string pingPayload;
+            serializeJson(pingDoc, pingPayload);
+    
+            ws.send(pingPayload.c_str());
+            LogDebug(GetReferenceId(), "WEBSOCKET - Sent ping");
+        }
+
+
         ws.poll();
 
         currentMillis = millis();
@@ -256,8 +293,17 @@ void loop()
             bool isDataValid = readPzem004T(GetReferenceId());
             if (isDataValid)
             {
-                LogInfo(referenceId, "Sensor data is valid, send to server: ");
-                sendSensorData(GetReferenceId());
+                LogInfo(GetReferenceId(),  "Sensor data is valid, send to server: ");
+                if (ws.available())
+                {
+                    LogInfo(GetReferenceId(), "Sending sensor data to server...");
+                    sendSensorData(GetReferenceId());
+                }
+                else
+                {   
+                    LogWarning(GetReferenceId(), "WebSocket not available, cannot send data");
+                    tryConnectWebSocket();
+                }
             }
         }
         else

@@ -17,8 +17,9 @@
  *  frequency     | double precision       | NOT NULL
  *  power_factor  | double precision       | NOT NULL
  *
- * Contoh pesan JSON:
+ * exp message :
  * {
+ *   "type"         : "sensor_data",
  *   "unit_id"      : 1,
  *   "voltage"      : 10,
  *   "current"      : 10,
@@ -38,6 +39,7 @@
 void sendSensorData(const std::string &referenceId)
 {
     StaticJsonDocument<250> json;
+    json["type"] = "sensor_data";
     json["unit_id"] = GetDeviceId();
     json["voltage"] = GetVoltage();
     json["current"] = GetCurrent();
@@ -49,6 +51,8 @@ void sendSensorData(const std::string &referenceId)
 
     std::string payload;
     serializeJson(json, payload);
+
+    LogDebug(referenceId, "sendSensorData - Payload: " + payload); 
 
     try
     {

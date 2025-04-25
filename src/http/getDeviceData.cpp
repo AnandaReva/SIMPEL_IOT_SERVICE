@@ -47,6 +47,12 @@ bool getDeviceData(const std::string &referenceId)
         return false;
     }
 
+    url += "/process";
+    
+    LogDebug(referenceId, "getDeviceData - Complete URL: " + url);
+
+
+
     http.begin(url.c_str());
 
     // Tambahkan header yang dibutuhkan

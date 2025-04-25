@@ -13,15 +13,15 @@
 #include <HTTPClient.h>
 
 std::string appName = "SIMPEL_DEVICE_SC";
-std::string appVersion = "0.1.2";
+std::string appVersion = "0.2.1";
 
-std::string serverUrl = "http://10.4.157.103:5001";
-std::string websocketUrl = "ws://10.4.157.103:5001/device-connect";
+std::string serverUrl = "http://192.168.1.6:5001";
+std::string websocketUrl = "ws://192.168.1.6:5001/device-connect";
 
 /* deiveId, deviceName , devicePassword, WiFiSsid, WiFIPassword, readInterval */
 DeviceInfo deviceInfo = {0, "", "", "", "", 0};
 
-/* power energy, voltage , current, frequency, powerFactor */
+/* power, energy, voltage , current, frequency, powerFactor */
 SensorData sensorData = {0, 0, 0, 0, 0, 0, ""};
 
 std::string referenceId = "";
@@ -183,7 +183,8 @@ void SetPowerFactor(float powerFactor)
 {
     sensorData.powerFactor = powerFactor;
 };
-void SetReadTstamp(float readTstamp)
+void SetReadTstamp(const std::string &readTstamp)
 {
     sensorData.readTstamp = readTstamp;
-};
+}
+

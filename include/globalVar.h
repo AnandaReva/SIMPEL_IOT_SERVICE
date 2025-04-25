@@ -92,7 +92,9 @@ void SetDevicePassword(const std::string &);
 void SetWifiSSID(const std::string &); 
 void SetWifiPassword(const std::string &); 
 void SetReadInterval(unsigned long);
-void SetReadTstamp(std::string);
+void SetReadTstamp(const std::string &);
+
+
 
 void SetPower(float);
 void SetEnergy(float);

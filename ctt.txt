@@ -1,0 +1,11 @@
+
+// find process pid
+fuser /dev/ttyUSB0
+
+// exp output : /dev/ttyUSB0:         5524
+
+
+
+
+// kill process
+sudo kill -9 5524
