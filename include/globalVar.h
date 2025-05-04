@@ -2,8 +2,8 @@
  * @file globalVar.h
  *
  */
-#ifndef APP_INFO_H
-#define APP_INFO_H
+#ifndef GLOBAL_VAR_H
+#define GLOBAL_VAR_H
 
 #include <string>
 #include <WiFiManager.h>
@@ -11,12 +11,8 @@
 #include <PZEM004Tv30.h>
 #include <HTTPClient.h>
 
-
-extern std::string referenceId;
-extern std::string appName;
-extern std::string appVersion;
-extern std::string serverUrl;
-extern std::string websocketUrl;
+#define PZEM_RX_PIN 25
+#define PZEM_TX_PIN 26
 
 struct DeviceInfo
 {
@@ -31,7 +27,7 @@ struct DeviceInfo
 struct SensorData
 {
     float power;
-    float energy;
+    double energy;
     float voltage;
     float current;
     float frequency;
@@ -39,68 +35,91 @@ struct SensorData
     std::string readTstamp;
 };
 
-// instance
+class GlobalVar
+{
+public:
+    static GlobalVar &Instance();
 
-// instance
-extern WiFiManager wm;
-extern HTTPClient http;
-extern websockets::WebsocketsClient ws;
-extern HardwareSerial serial;
-extern PZEM004Tv30 pzem;
-// pin consts
-#define PZEM_RX_PIN 25
-#define PZEM_TX_PIN 26
+    // App Info
+    std::string GetAppName() const;
+    std::string GetAppVersion() const;
+    std::string GetServerUrl() const;
+    std::string GetWebsocketUrl() const;
 
+    // Reference ID
+    std::string GetReferenceId() const;
+    void SetReferenceId(const std::string &);
 
-std::string GetAppName();
-std::string GetAppVersion();
-std::string GetServerUrl();
-std::string GetWebsocketUrl();
+    // Device Info
+    unsigned long GetDeviceId() const;
+    std::string GetDeviceName() const;
+    std::string GetDevicePassword() const;
+    std::string GetWifiSSID() const;
+    std::string GetWifiPassword() const;
+    unsigned long GetReadInterval() const;
 
-// Deklarasi global variable (didefinisikan di .cpp)
-extern DeviceInfo deviceInfo;
+    void SetDeviceId(unsigned long);
+    void SetDeviceName(const std::string &);
+    void SetDevicePassword(const std::string &);
+    void SetWifiSSID(const std::string &);
+    void SetWifiPassword(const std::string &);
+    void SetReadInterval(unsigned long);
 
-extern SensorData sensorData;
+    // Sensor Data
+    float GetPower() const;
+    double GetEnergy() const;
+    float GetVoltage() const;
+    float GetCurrent() const;
+    float GetFrequency() const;
+    float GetPowerFactor() const;
+    std::string GetReadTstamp() const;
 
-// Getter
-std::string GetReferenceId();
-std::string GetAppName();
-std::string GetAppVersion();
+    void SetPower(float);
+    void SetEnergy(double);
+    void SetVoltage(float);
+    void SetCurrent(float);
+    void SetFrequency(float);
+    void SetPowerFactor(float);
+    void SetReadTstamp(const std::string &);
 
-unsigned long GetDeviceId();
-std::string GetDeviceName();
-std::string GetDevicePassword();
-std::string GetWifiSSID();
-std::string GetWifiPassword();
-unsigned long GetReadInterval();
+    // Misc
+    double GetLastEnergy() const;
+    void SetLastEnergy(double);
 
-float GetPower();
-float GetEnergy();
-float GetVoltage();
-float GetCurrent();
-float GetFrequency();
-float GetPowerFactor();
-std::string GetReadTstamp();
+    std::string GetLastResetMonth() const;
+    void SetLastResetMonth(const std::string &);
 
-// Setter
-void SetReferenceId(const std::string &);
+    bool GetIsLoopDisabled() const;
+    void SetIsLoopDisabled(bool);
 
+    bool GetIsConnectedToWifi() const;
+    void SetIsConnectedToWifi(bool);
 
-void SetDeviceId(unsigned long);
-void SetDeviceName(const std::string &);
-void SetDevicePassword(const std::string &);
-void SetWifiSSID(const std::string &); 
-void SetWifiPassword(const std::string &); 
-void SetReadInterval(unsigned long);
-void SetReadTstamp(const std::string &);
+    // Hardware Instances
+    WiFiManager wm;
+    HTTPClient http;
+    websockets::WebsocketsClient ws;
+    HardwareSerial serial;
+    PZEM004Tv30 pzem;
 
+private:
+    GlobalVar();
+    GlobalVar(const GlobalVar &) = delete;
+    GlobalVar &operator=(const GlobalVar &) = delete;
 
+    std::string referenceId;
+    std::string appName;
+    std::string appVersion;
+    std::string serverUrl;
+    std::string websocketUrl;
 
-void SetPower(float);
-void SetEnergy(float);
-void SetVoltage(float);
-void SetCurrent(float);
-void SetFrequency(float);
-void SetPowerFactor(float);
+    DeviceInfo deviceInfo;
+    SensorData sensorData;
+
+    double lastEnergy;
+    std::string lastResetMonth;
+    bool isLoopDisabled;
+    bool isConnectedToWifi;
+};
 
 #endif

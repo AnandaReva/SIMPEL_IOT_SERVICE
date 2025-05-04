@@ -22,7 +22,8 @@
  *     "Payload": {
  *         "device_data": {
  *             "device_id": 29,
- *             "device_read_interval": 1
+ *             "device_read_interval": 1,
+ *             "device_last_energy_data": 192
  *         },
  *         "status": "success"
  *     }
@@ -48,10 +49,8 @@ bool getDeviceData(const std::string &referenceId)
     }
 
     url += "/process";
-    
+
     LogDebug(referenceId, "getDeviceData - Complete URL: " + url);
-
-
 
     http.begin(url.c_str());
 
@@ -92,8 +91,23 @@ bool getDeviceData(const std::string &referenceId)
             return false;
         }
 
-        unsigned long deviceId = doc["Payload"]["device_data"]["device_id"];
+        // Ambil last_energy
+        if (doc["Payload"]["device_last_energy_data"].is<double>())
+        {
+            double lastEnergy = doc["Payload"]["device_last_energy_data"];
+            SetLastEnergy(lastEnergy);
 
+            // Reset energy setelah diset
+            SetLastEnergy(0.0);
+        }
+        else
+        {
+            SetLastEnergy(0.0); // JIka kalau tidak ada
+        }
+
+        LogInfo(referenceId, "getDeviceData - Success. last_energy: " + std::to_string(GetLastEnergy()));
+
+        unsigned long deviceId = doc["Payload"]["device_data"]["device_id"];
         int readInterval = doc["Payload"]["device_data"]["device_read_interval"];
         if (readInterval <= 0 || readInterval > 120)
         {

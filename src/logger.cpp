@@ -7,6 +7,7 @@
 
 #include "logger.h"
 #include "globalVar.h"
+#include <generateTstamp.h>
 
 #include <iostream>
 #include <ctime>
@@ -21,23 +22,10 @@ void SetLogLevel(LogLevel level)
     currentLogLevel = level;
 }
 
-string GetTimestamp()
-{
-    char buffer[40];
-    timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    tm *timeinfo = localtime(&ts.tv_sec);
-    strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S", timeinfo);
-
-    stringstream timestamp;
-    timestamp << buffer << "." << ts.tv_nsec << "+07:00"; // +07:00 bisa kamu ubah
-    return timestamp.str();
-}
-
 string GetPrefix(const string &level, const string &id)
 {
     stringstream ss;
-    ss << GetTimestamp()
+    ss << generateTstamp()
        << " - " << GetAppName()
        << " - VERSION: " << GetAppVersion()
        << " - " << id << " - " << level << " - ";

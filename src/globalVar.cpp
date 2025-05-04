@@ -5,186 +5,79 @@
  */
 
 #include "globalVar.h"
-#include <WiFiManager.h>
-#include <ArduinoWebsockets.h> // Ensure this library is installed
-#include <PZEM004Tv30.h>
 
-#include <string>
-#include <HTTPClient.h>
-
-std::string appName = "SIMPEL_DEVICE_SC";
-std::string appVersion = "0.2.1";
-
-std::string serverUrl = "http://192.168.1.6:5001";
-std::string websocketUrl = "ws://192.168.1.6:5001/device-connect";
-
-/* deiveId, deviceName , devicePassword, WiFiSsid, WiFIPassword, readInterval */
-DeviceInfo deviceInfo = {0, "", "", "", "", 0};
-
-/* power, energy, voltage , current, frequency, powerFactor */
-SensorData sensorData = {0, 0, 0, 0, 0, 0, ""};
-
-std::string referenceId = "";
-
-// global Insctance
-/* ----- PIN */
-HardwareSerial serial(2); // UART2
-/* ----- INSTANCE */
-WiFiManager wm;
-HTTPClient http;
-websockets::WebsocketsClient ws;
-PZEM004Tv30 pzem(serial, PZEM_RX_PIN, PZEM_TX_PIN);
-
-/**
- * @brief GETTER FUNCTIONS
- *
- */
-
-std::string GetReferenceId()
+GlobalVar &GlobalVar::Instance()
 {
-    return referenceId;
+    static GlobalVar instance;
+    return instance;
 }
 
-std::string GetAppName()
+GlobalVar::GlobalVar()
+    : appName("SIMPEL_DEVICE_SC"),
+      appVersion("0.2.2"),
+      serverUrl("http://10.4.157.103:5001"),
+      websocketUrl("ws://10.4.157.103:5001/device-connect"),
+      serial(2), // UART2
+      pzem(serial, PZEM_RX_PIN, PZEM_TX_PIN),
+      lastEnergy(0.0),
+      isLoopDisabled(true),
+      isConnectedToWifi(false)
 {
-    return appName;
-}
-std::string GetAppVersion()
-{
-    return appVersion;
-}
-std::string GetServerUrl()
-{
-    return serverUrl;
-}
-std::string GetWebsocketUrl()
-{
-    return websocketUrl;
-}
-/* --------- DEVICE INFO ---------- */
-unsigned long GetDeviceId()
-{
-    return deviceInfo.deviceId;
+    deviceInfo = {0, "", "", "", "", 0};
+    sensorData = {0, 0, 0, 0, 0, 0, ""};
 }
 
-std::string GetDeviceName()
-{
-    return deviceInfo.deviceName;
-}
-std::string GetDevicePassword()
-{
-    return deviceInfo.devicePassword;
-}
+// App Info
+std::string GlobalVar::GetAppName() const { return appName; }
+std::string GlobalVar::GetAppVersion() const { return appVersion; }
+std::string GlobalVar::GetServerUrl() const { return serverUrl; }
+std::string GlobalVar::GetWebsocketUrl() const { return websocketUrl; }
 
-unsigned long GetReadInterval()
-{
-    return deviceInfo.readInterval;
-}
+// Reference ID
+std::string GlobalVar::GetReferenceId() const { return referenceId; }
+void GlobalVar::SetReferenceId(const std::string &ref) { referenceId = ref; }
 
+// Device Info
+unsigned long GlobalVar::GetDeviceId() const { return deviceInfo.deviceId; }
+std::string GlobalVar::GetDeviceName() const { return deviceInfo.deviceName; }
+std::string GlobalVar::GetDevicePassword() const { return deviceInfo.devicePassword; }
+std::string GlobalVar::GetWifiSSID() const { return deviceInfo.wifiSsid; }
+std::string GlobalVar::GetWifiPassword() const { return deviceInfo.wifiPassword; }
+unsigned long GlobalVar::GetReadInterval() const { return deviceInfo.readInterval; }
 
+void GlobalVar::SetDeviceId(unsigned long id) { deviceInfo.deviceId = id; }
+void GlobalVar::SetDeviceName(const std::string &name) { deviceInfo.deviceName = name; }
+void GlobalVar::SetDevicePassword(const std::string &pass) { deviceInfo.devicePassword = pass; }
+void GlobalVar::SetWifiSSID(const std::string &ssid) { deviceInfo.wifiSsid = ssid; }
+void GlobalVar::SetWifiPassword(const std::string &pwd) { deviceInfo.wifiPassword = pwd; }
+void GlobalVar::SetReadInterval(unsigned long interval) { deviceInfo.readInterval = interval; }
 
+// Sensor Data
+float GlobalVar::GetPower() const { return sensorData.power; }
+double GlobalVar::GetEnergy() const { return sensorData.energy; }
+float GlobalVar::GetVoltage() const { return sensorData.voltage; }
+float GlobalVar::GetCurrent() const { return sensorData.current; }
+float GlobalVar::GetFrequency() const { return sensorData.frequency; }
+float GlobalVar::GetPowerFactor() const { return sensorData.powerFactor; }
+std::string GlobalVar::GetReadTstamp() const { return sensorData.readTstamp; }
 
-std::string GetWifiSSID()
-{
-    return deviceInfo.wifiSsid;
-}
-std::string GetWifiPassword()
-{
-    return deviceInfo.wifiPassword;
-}
+void GlobalVar::SetPower(float v) { sensorData.power = v; }
+void GlobalVar::SetEnergy(double v) { sensorData.energy = v; }
+void GlobalVar::SetVoltage(float v) { sensorData.voltage = v; }
+void GlobalVar::SetCurrent(float v) { sensorData.current = v; }
+void GlobalVar::SetFrequency(float v) { sensorData.frequency = v; }
+void GlobalVar::SetPowerFactor(float v) { sensorData.powerFactor = v; }
+void GlobalVar::SetReadTstamp(const std::string &ts) { sensorData.readTstamp = ts; }
 
-/* --------- SENSOR DATA ---------- */
-float GetPower()
-{
-    return sensorData.power;
-};
-float GetEnergy()
-{
-    return sensorData.energy;
-};
-float GetVoltage()
-{
-    return sensorData.voltage;
-};
-float GetCurrent()
-{
-    return sensorData.current;
-};
-float GetFrequency()
-{
-    return sensorData.frequency;
-};
-float GetPowerFactor()
-{
-    return sensorData.powerFactor;
-};
-std::string GetReadTstamp()
-{
-    return sensorData.readTstamp;
-};
+// Misc
+double GlobalVar::GetLastEnergy() const { return lastEnergy; }
+void GlobalVar::SetLastEnergy(double e) { lastEnergy = e; }
 
-/**
- * @brief SETTER FUNCTIONS
- *
- */
+std::string GlobalVar::GetLastResetMonth() const { return lastResetMonth; }
+void GlobalVar::SetLastResetMonth(const std::string &m) { lastResetMonth = m; }
 
-void SetReferenceId(const std::string &referenceId)
-{
-}
-/* --------- DEVICE INFO ---------- */
-void SetDeviceId(unsigned long deviceId)
-{
-    deviceInfo.deviceId = deviceId;
-}
-void SetDeviceName(const std::string &name)
-{
-    deviceInfo.deviceName = name;
-}
-void SetDevicePassword(const std::string &devicePassword)
-{
-    deviceInfo.devicePassword = devicePassword;
-}
-void SetWifiSSID(const std::string &ssid)
-{
-    deviceInfo.wifiSsid = ssid;
-}
-void SetWifiPassword(const std::string &password)
-{
-    deviceInfo.wifiPassword = password;
-}
+bool GlobalVar::GetIsLoopDisabled() const { return isLoopDisabled; }
+void GlobalVar::SetIsLoopDisabled(bool val) { isLoopDisabled = val; }
 
-void SetReadInterval(unsigned long interval)
-{
-    deviceInfo.readInterval = interval;
-}
-
-/* --------- SENSOR DATA ---------- */
-void SetPower(float power)
-{
-    sensorData.power = power;
-};
-void SetEnergy(float energy)
-{
-    sensorData.energy = energy;
-}
-void SetVoltage(float voltage)
-{
-    sensorData.voltage = voltage;
-};
-void SetCurrent(float current)
-{
-    sensorData.current = current;
-};
-void SetFrequency(float frequency)
-{
-    sensorData.frequency = frequency;
-}
-void SetPowerFactor(float powerFactor)
-{
-    sensorData.powerFactor = powerFactor;
-};
-void SetReadTstamp(const std::string &readTstamp)
-{
-    sensorData.readTstamp = readTstamp;
-}
-
+bool GlobalVar::GetIsConnectedToWifi() const { return isConnectedToWifi; }
+void GlobalVar::SetIsConnectedToWifi(bool val) { isConnectedToWifi = val; }

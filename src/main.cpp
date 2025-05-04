@@ -68,9 +68,6 @@ Re-fetch Device Data using deviceId
 #include "sendSensorData.h"
 #include "pzem004t.h"
 
-bool isDisableLoop = true;
-bool isConnectedToWifi = false;
-
 // Function prototypes
 void onWebSocketOpen();
 void onWebSocketClose();
@@ -78,8 +75,10 @@ void startupFlow();
 
 void watchWebSocketStatus()
 {
-    ws.onEvent([](websockets::WebsocketsEvent event, String data)
-               {
+    GlobalVar &gv = GlobalVar::Instance();
+
+    gv.ws.onEvent([](websockets::WebsocketsEvent event, String data)
+                  {
          switch (event){
          case websockets::WebsocketsEvent::ConnectionOpened:
              onWebSocketOpen();
@@ -102,14 +101,16 @@ void startWiFiAndGetDeviceData()
 
     int startupAttempt = 0;
 
+    GlobalVar &gv = GlobalVar::Instance();
+
     while (startupAttempt < maxStartupAttempts)
     {
         startupAttempt++;
-        SetReferenceId("SETUP");
-        LogInfo(GetReferenceId(), "Startup Attempt #" + std::to_string(startupAttempt));
+        gv.SetReferenceId("SETUP");
+        LogInfo(gv.GetReferenceId(), "Startup Attempt #" + std::to_string(startupAttempt));
 
         // Step 1: Buka WiFi Manager
-        openWiFiManager(GetReferenceId());
+        openWiFiManager(gv.GetReferenceId());
 
         // Step 2: Ambil data perangkat
         int getDataTryCount = 0;
@@ -118,26 +119,26 @@ void startWiFiAndGetDeviceData()
         while (getDataTryCount < maxGetDataAttempts)
         {
             getDataTryCount++;
-            LogInfo(GetReferenceId(), "Trying to get device data... Attempt #" + std::to_string(getDataTryCount));
+            LogInfo(gv.GetReferenceId(), "Trying to get device data... Attempt #" + std::to_string(getDataTryCount));
             delay(2000);
 
-            isDataReceived = getDeviceData(GetReferenceId());
+            isDataReceived = getDeviceData(gv.GetReferenceId());
             if (isDataReceived)
                 break;
         }
 
         if (isDataReceived)
         {
-            LogInfo(GetReferenceId(), "✅ Device data retrieved successfully");
+            LogInfo(gv.GetReferenceId(), "✅ Device data retrieved successfully");
             return; // Lanjut ke WebSocket
         }
 
-        LogError(GetReferenceId(), "❌ Failed to get device data. Reopening WiFi Manager...");
+        LogError(gv.GetReferenceId(), "❌ Failed to get device data. Reopening WiFi Manager...");
         WiFi.disconnect(true); // Reset koneksi WiFi
         delay(1000);
     }
 
-    LogError(GetReferenceId(), "❌ All startup attempts failed. Restarting device...");
+    LogError(gv.GetReferenceId(), "❌ All startup attempts failed. Restarting device...");
     ESP.restart();
 }
 
@@ -146,28 +147,30 @@ void tryConnectWebSocket()
     const int maxWebSocketAttempts = 3;
     int wsFailCount = 0;
 
+    GlobalVar &gv = GlobalVar::Instance();
+
     while (wsFailCount < maxWebSocketAttempts)
     {
-        SetReferenceId("WS" + std::to_string(wsFailCount + 1));
+        gv.SetReferenceId("WS" + std::to_string(wsFailCount + 1));
 
-        connectWebSocket(GetReferenceId());
-        watchWebSocketStatus();   // <— panggil di sini tiap kali connect
+        connectWebSocket(gv.GetReferenceId());
+        watchWebSocketStatus(); // <— panggil di sini tiap kali connect
 
         delay(2000);
-        if (ws.available())
+        if (gv.ws.available())
         {
-            LogInfo(GetReferenceId(), "✅ WebSocket connected successfully");
-            isDisableLoop = false;
+            LogInfo(gv.GetReferenceId(), "✅ WebSocket connected successfully");
+            gv.SetIsLoopDisabled(false);
             return;
         }
 
         wsFailCount++;
-        ws.close();
-        LogWarning(GetReferenceId(), "WebSocket connection failed, retrying...");
+        gv.ws.close();
+        LogWarning(gv.GetReferenceId(), "WebSocket connection failed, retrying...");
     }
 
     // Kalau 3x gagal
-    LogError(GetReferenceId(), "❌ WebSocket repeatedly failed. Reopening WiFi Manager...");
+    LogError(gv.GetReferenceId(), "❌ WebSocket repeatedly failed. Reopening WiFi Manager...");
     WiFi.disconnect(true);
     delay(1000);
     startupFlow();
@@ -175,48 +178,60 @@ void tryConnectWebSocket()
 
 void startupFlow()
 {
-    SetReferenceId("SETUP");
-    LogInfo(GetReferenceId(), "---- STARTING DEVICE -----");
+    GlobalVar &gv = GlobalVar::Instance();
+
+    gv.SetReferenceId("SETUP");
+    LogInfo(gv.GetReferenceId(), "---- STARTING DEVICE -----");
 
     startWiFiAndGetDeviceData();
     tryConnectWebSocket();
 
-    isDisableLoop = false;
-    isConnectedToWifi = true;
+    gv.SetIsLoopDisabled(false);
+    gv.SetIsConnectedToWifi(true);
 
-    LogInfo(GetReferenceId(), "✅ Startup successful!");
+    LogInfo(gv.GetReferenceId(), "✅ Startup successful!");
 }
 
 void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
 {
+    GlobalVar &gv = GlobalVar::Instance();
+
     LogWarning("onWiFiDisconnected", " - WIFI DISCONNECTED!!!");
-    isConnectedToWifi = false;
-    isDisableLoop = true;
+    gv.SetIsLoopDisabled(false);
+    gv.SetIsConnectedToWifi(true);
 };
 
 void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info)
 {
+    GlobalVar &gv = GlobalVar::Instance();
+
     LogDebug("onWiFiConnected", " - WIFI IS CONNECTED!!!");
     LogDebug("onWiFiConnected", "IP ADD : ", std::string(WiFi.localIP().toString().c_str()));
-    isConnectedToWifi = true;
-    isDisableLoop = false;
+
+    gv.SetIsLoopDisabled(false);
+    gv.SetIsConnectedToWifi(true);
 }
 
 void onWebSocketOpen()
 {
+    GlobalVar &gv = GlobalVar::Instance();
+
     std::string referenceId = generateRandStr(8);
     LogInfo(referenceId, "WEBSOCKET - Connection opened");
-    isDisableLoop = false;
+    gv.SetIsLoopDisabled(false);
 }
 
 void onWebSocketClose()
 {
+
     static int wsFailCount = 0;
     wsFailCount++;
 
+    GlobalVar &gv = GlobalVar::Instance();
+
     std::string referenceId = generateRandStr(8);
     LogWarning(referenceId, "WEBSOCKET - Connection closed");
-    isDisableLoop = true;
+    gv.SetIsLoopDisabled(true);
 
     if (wsFailCount >= 3)
     {
@@ -232,6 +247,9 @@ void setup()
 {
     const int baudRate = 115200;
     Serial.begin(baudRate);
+
+    GlobalVar &gv = GlobalVar::Instance();
+
     delay(1000);
     WiFi.onEvent(onWiFiConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
     WiFi.onEvent(onWiFiDisconnected);
@@ -239,11 +257,12 @@ void setup()
 
     if (WiFi.status() == WL_CONNECTED)
     {
-        isConnectedToWifi = true;
+
+        gv.SetIsConnectedToWifi(true);
     }
 
-    LogDebug(GetReferenceId(), "SETUP COMPLETED. IsDisableLoop: " + std::to_string(isDisableLoop));
-    LogDebug(GetReferenceId(), "isConnectedToWifi: " + std::to_string(isConnectedToWifi));
+    LogDebug(gv.GetReferenceId(), "SETUP COMPLETED. IsDisableLoop: " + std::to_string(gv.GetIsLoopDisabled()));
+    LogDebug(gv.GetReferenceId(), "isConnectedToWifi: " + std::to_string(gv.GetIsConnectedToWifi()));
 };
 
 unsigned long currentMillis = millis();
@@ -253,55 +272,56 @@ static const unsigned long PING_INTERVAL = 5000;
 static unsigned long lastPingMillis = 0;
 void loop()
 {
-    if (!isDisableLoop && isConnectedToWifi)
-    {
+    GlobalVar &gv = GlobalVar::Instance();
 
+    if (!gv.GetIsLoopDisabled() && gv.GetIsConnectedToWifi())
+    {
 
         unsigned long now = millis();
 
         // 1) Kirim ping secara periodik
-        if (ws.available() && now - lastPingMillis >= PING_INTERVAL) {
+        if (gv.ws.available() && now - lastPingMillis >= PING_INTERVAL)
+        {
             lastPingMillis = now;
-    
+
             // Bangun pesan ping
             StaticJsonDocument<128> pingDoc;
             pingDoc["type"] = "ping";
-            pingDoc["device_id"] = GetDeviceId();
+            pingDoc["device_id"] = gv.GetDeviceId();
 
-            LogDebug(GetReferenceId(), "WEBSOCKET - Sending ping");
-    
+            LogDebug(gv.GetReferenceId(), "WEBSOCKET - Sending ping");
+
             std::string pingPayload;
             serializeJson(pingDoc, pingPayload);
-    
-            ws.send(pingPayload.c_str());
-            LogDebug(GetReferenceId(), "WEBSOCKET - Sent ping");
+
+            gv.ws.send(pingPayload.c_str());
+            LogDebug(gv.GetReferenceId(), "WEBSOCKET - Sent ping");
         }
 
-
-        ws.poll();
+        gv.ws.poll();
 
         currentMillis = millis();
 
-        if (currentMillis - previousMillis >= GetReadInterval())
+        if (currentMillis - previousMillis >= gv.GetReadInterval())
         {
             previousMillis = currentMillis;
-            SetReferenceId(generateRandStr(8));
+            gv.SetReferenceId(generateRandStr(8));
 
-            LogDebug(GetReferenceId(), "===== Generated reference id: " + GetReferenceId() + " =====");
-            LogDebug(GetReferenceId(), "Free heap: " + std::string(String(ESP.getFreeHeap()).c_str()) + " byte");
+            LogDebug(gv.GetReferenceId(), "===== Generated reference id: " + gv.GetReferenceId() + " =====");
+            LogDebug(gv.GetReferenceId(), "Free heap: " + std::string(String(ESP.getFreeHeap()).c_str()) + " byte");
 
-            bool isDataValid = readPzem004T(GetReferenceId());
+            bool isDataValid = readPzem004T(gv.GetReferenceId());
             if (isDataValid)
             {
-                LogInfo(GetReferenceId(),  "Sensor data is valid, send to server: ");
-                if (ws.available())
+                LogInfo(gv.GetReferenceId(), "Sensor data is valid, send to server: ");
+                if (gv.ws.available())
                 {
-                    LogInfo(GetReferenceId(), "Sending sensor data to server...");
-                    sendSensorData(GetReferenceId());
+                    LogInfo(gv.GetReferenceId(), "Sending sensor data to server...");
+                    sendSensorData(gv.GetReferenceId());
                 }
                 else
-                {   
-                    LogWarning(GetReferenceId(), "WebSocket not available, cannot send data");
+                {
+                    LogWarning(gv.GetReferenceId(), "WebSocket not available, cannot send data");
                     tryConnectWebSocket();
                 }
             }
@@ -310,5 +330,47 @@ void loop()
         {
             delay(1000);
         }
+    }
+}
+
+void updateDevice()
+{
+    int updateTryCount = 0;
+    GlobalVar &gv = GlobalVar::Instance();
+
+    // stop loop
+    
+    gv.SetIsLoopDisabled(true);
+
+    LogInfo(gv.GetReferenceId(), "updateDevice - Updating device data...");
+
+    bool isScuess = getDeviceData(gv.GetReferenceId());
+    if (isScuess)
+    {
+        LogInfo(gv.GetReferenceId(), "updateDevice - Device data updated successfully");
+    }
+    else
+    {
+        while (updateTryCount < 3)
+        {
+            updateTryCount++;
+            LogInfo(gv.GetReferenceId(), "updateDevice - Trying to update device data... Attempt #" + std::to_string(updateTryCount));
+            delay(2000); // Delay antara percobaan ulang
+
+            isScuess = getDeviceData(gv.GetReferenceId());
+            if (isScuess)
+            {
+                LogInfo(gv.GetReferenceId(), "updateDevice - Device data updated successfully after retry #" + std::to_string(updateTryCount));
+                break;
+            }
+        }
+
+        if (!isScuess) // Hanya log error jika masih gagal setelah 3 kali percobaan
+        {
+            LogError(gv.GetReferenceId(), "updateDevice - Failed to update device data after 3 attempts");
+        }
+
+        // Jika gagal, jalankan startupFlow()
+        startupFlow();
     }
 }

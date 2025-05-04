@@ -27,7 +27,7 @@
  *   "energy"       : 0.1,
  *   "frequency"    : 100,
  *   "power_factor" : 1,
- *   "timestamp"    : "2025-04-22T12:34:56"
+ *   "timestamp"    : "2025-04-26 11:32:45"
  * }
  */
 
@@ -38,26 +38,29 @@
 
 void sendSensorData(const std::string &referenceId)
 {
+    GlobalVar &gv = GlobalVar::Instance();
+
+
     StaticJsonDocument<250> json;
     json["type"] = "sensor_data";
-    json["unit_id"] = GetDeviceId();
-    json["voltage"] = GetVoltage();
-    json["current"] = GetCurrent();
-    json["power"] = GetPower();
-    json["energy"] = GetEnergy();
-    json["frequency"] = GetFrequency();
-    json["power_factor"] = GetPowerFactor();
-    json["timestamp"] = GetReadTstamp();
+    json["unit_id"] = gv.GetDeviceId();
+    json["voltage"] = gv.GetVoltage();
+    json["current"] = gv.GetCurrent();
+    json["power"] = gv.GetPower();
+    json["energy"] = gv.GetEnergy();
+    json["frequency"] = gv.GetFrequency();
+    json["power_factor"] = gv.GetPowerFactor();
+    json["timestamp"] = gv.GetReadTstamp();
 
     std::string payload;
     serializeJson(json, payload);
 
-    LogDebug(referenceId, "sendSensorData - Payload: " + payload); 
+    LogDebug(referenceId, "sendSensorData - Payload: " + payload);
 
     try
     {
         LogDebug(referenceId, "sendSensorData - Sending message");
-        ws.send(payload.c_str());
+        gv.ws.send(payload.c_str());
         LogDebug(referenceId, "sendSensorData - Sent successfully");
     }
     catch (const std::exception &e)
