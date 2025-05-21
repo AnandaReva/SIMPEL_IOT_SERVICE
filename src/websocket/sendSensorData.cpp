@@ -40,6 +40,7 @@ void sendSensorData(const std::string &referenceId)
 {
     GlobalVar &gv = GlobalVar::Instance();
 
+	
 
     StaticJsonDocument<250> json;
     json["type"] = "sensor_data";
@@ -51,7 +52,8 @@ void sendSensorData(const std::string &referenceId)
     json["frequency"] = gv.GetFrequency();
     json["power_factor"] = gv.GetPowerFactor();
     json["timestamp"] = gv.GetReadTstamp();
-
+    json["free_memory"] = ESP.getFreeHeap();
+    json["total_memory"] = ESP.getHeapSize();
     std::string payload;
     serializeJson(json, payload);
 

@@ -14,7 +14,7 @@ GlobalVar &GlobalVar::Instance()
 
 GlobalVar::GlobalVar()
     : appName("SIMPEL_DEVICE_SC"),
-      appVersion("0.2.2"),
+      appVersion("0.2.3"),
       serverUrl("http://10.4.157.103:5001"),
       websocketUrl("ws://10.4.157.103:5001/device-connect"),
       serial(2), // UART2
