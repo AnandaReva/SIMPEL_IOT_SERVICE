@@ -24,10 +24,11 @@ void SetLogLevel(LogLevel level)
 
 string GetPrefix(const string &level, const string &id)
 {
+    GlobalVar &gv = GlobalVar::Instance();
     stringstream ss;
     ss << generateTstamp()
-       << " - " << GetAppName()
-       << " - VERSION: " << GetAppVersion()
+       << " - " << gv.GetAppName()
+       << " - VERSION: " << gv.GetAppVersion()
        << " - " << id << " - " << level << " - ";
     return ss.str();
 }

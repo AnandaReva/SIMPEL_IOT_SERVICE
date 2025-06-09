@@ -14,6 +14,20 @@
 #define PZEM_RX_PIN 25
 #define PZEM_TX_PIN 26
 
+#define BLUE_LED_PIN 34
+
+#define RED_LED_PIN 35
+
+#define PUSH_BUTTON_PIN 15
+
+// LED rule : 0 = off , 1 = on , 2 = blink
+struct LEDInfo
+{
+    int blinkInterval;
+    int RedLEDStatus ;  // 0 = off, 1 = on Solid , 2 = on blink
+    int BlueLEDStatus; // 0 = off, 1 = on solid, 2 = blink
+};
+
 struct DeviceInfo
 {
     unsigned long deviceId;
@@ -49,6 +63,16 @@ public:
     // Reference ID
     std::string GetReferenceId() const;
     void SetReferenceId(const std::string &);
+
+    // LED Info
+    int GetRedLEDStatus() const;
+    int GetBlueLEDStatus() const;
+    int GetLEDBlinkInterval() const;
+
+
+
+    void SetRedLEDStatus(int status);
+    void SetBlueLEDStatus(int status);
 
     // Device Info
     unsigned long GetDeviceId() const;
@@ -113,6 +137,7 @@ private:
     std::string serverUrl;
     std::string websocketUrl;
 
+    LEDInfo ledInfo;
     DeviceInfo deviceInfo;
     SensorData sensorData;
 
@@ -123,3 +148,5 @@ private:
 };
 
 #endif
+
+

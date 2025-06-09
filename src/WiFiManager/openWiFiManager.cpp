@@ -12,17 +12,18 @@ WiFiManagerParameter customDevicePassword("device_password", "Device Password", 
 
 void openWiFiManager(const std::string& referenceId)
 {
+    GlobalVar &gv = GlobalVar::Instance();
     LogInfo(referenceId, "-------------------------------------");
     LogInfo(referenceId, "WIFI MANAGER OPENED");
     LogInfo(referenceId, "-------------------------------------");
 
-    if (wm.getParametersCount() == 0)
+    if (gv.wm.getParametersCount() == 0)
     {
-        wm.addParameter(&customDeviceName);
-        wm.addParameter(&customDevicePassword);
+        gv.wm.addParameter(&customDeviceName);
+        gv.wm.addParameter(&customDevicePassword);
     }
 
-    if (!wm.startConfigPortal("SIMPEL DEVICE CONFIGURATION"))
+    if (!gv.wm.startConfigPortal("SIMPEL DEVICE CONFIGURATION"))
     {
         LogError(referenceId, "openWiFiManager - Gagal masuk mode konfigurasi, restart ESP32...");
         delay(3000);
@@ -44,10 +45,10 @@ void openWiFiManager(const std::string& referenceId)
     }
 
     // Simpan ke global
-    SetWifiSSID(ssid.c_str());
-    SetWifiPassword(password.c_str());
-    SetDeviceName(deviceName.c_str());
-    SetDevicePassword(devicePassword.c_str());
+    gv.SetWifiSSID(ssid.c_str());
+    gv.SetWifiPassword(password.c_str());
+    gv.SetDeviceName(deviceName.c_str());
+    gv.SetDevicePassword(devicePassword.c_str());
 
     // Log hasil konfigurasi
     LogInfo(referenceId, "openWiFiManager - WiFi SSID: " + std::string(ssid.c_str()));

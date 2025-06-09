@@ -33,8 +33,8 @@ Connect to WebSocket
         → Remove any WebSocket connection.
         → Reopen WiFi Manager (go back to step 1).
 
- */
-/* 🔄 Device Data Update via WebSocket
+
+ 🔄 Device Data Update via WebSocket
 Receive WebSocket message with type update
 → Message contains instruction to update the device data.
 
@@ -45,9 +45,22 @@ Re-fetch Device Data using deviceId
     a. Retry a limited number of times.
     b. If still failing:
         → Remove WebSocket connection.
-        → Reopen WiFi Manager (go back to Startup Flow step 1).
+                → Reopen WiFi Manager (go back to Startup Flow step 1).
 
- */
+
+                LED RULES
+                When startup and RED LED
+                NOT connected to WiFi:
+                → Turn on RED LED BLINKING
+                WHEN connected WIFI SSID, password and device creds inputted but fail wheter its wifi or Server: BLINKING RED
+                WHEN connected to WiFi and Server: TURN ON BLUE LED
+                WHEN connected to WiFi but NOT connected to Server: BLINKING BLUE
+
+
+                PUSH BUTTON RULES
+                When push button pressed short time: Reset device and wifi data, then open WiFi Manager
+                When push button pressed very long time: shutdown device and erase all data
+                */
 
 #include <Arduino.h>
 #include <WiFiManager.h>
@@ -72,6 +85,157 @@ Re-fetch Device Data using deviceId
 void onWebSocketOpen();
 void onWebSocketClose();
 void startupFlow();
+
+void ResetWiFiAndDeviceCredentials();
+//////////////////////////////////////
+enum LEDState
+{
+    RED_BLINK,
+    RED_ON,
+    BLUE_BLINK,
+    BLUE_ON,
+    LED_OFF
+};
+
+unsigned long lastLEDToggleTime = 0;
+
+void updateLEDState()
+{
+    GlobalVar &gv = GlobalVar::Instance();
+
+    if (!WiFi.isConnected())
+    {
+        gv.SetRedLEDStatus(1);  // BLINK
+        gv.SetBlueLEDStatus(0); // OFF
+    }
+    else if (WiFi.isConnected() && (gv.GetDeviceId() == 0))
+    {
+        gv.SetRedLEDStatus(1);  // BLINK
+        gv.SetBlueLEDStatus(0); // OFF
+    }
+    else if (WiFi.isConnected() && gv.GetDeviceId() > 0 && gv.ws.available())
+    {
+        gv.SetRedLEDStatus(0);  // OFF
+        gv.SetBlueLEDStatus(2); // ON
+    }
+    else if (WiFi.isConnected() && gv.GetDeviceId() > 0 && !gv.ws.available())
+    {
+        gv.SetRedLEDStatus(0);  // OFF
+        gv.SetBlueLEDStatus(1); // BLINK
+    }
+    else
+    {
+        gv.SetRedLEDStatus(0);  // OFF
+        gv.SetBlueLEDStatus(0); // OFF
+    }
+}
+
+void handleLED()
+{
+    GlobalVar &gv = GlobalVar::Instance();
+    unsigned long now = millis();
+
+    int redStatus = gv.GetRedLEDStatus();   // 0: OFF, 1: BLINK, 2: ON
+    int blueStatus = gv.GetBlueLEDStatus(); // 0: OFF, 1: BLINK, 2: ON
+    int blinkInterval = gv.GetLEDBlinkInterval();
+
+    static unsigned long lastToggle = 0;
+
+    if (now - lastToggle >= blinkInterval)
+    {
+        lastToggle = now;
+        // Blink status updated here only for logical tracking, but LED will remain ON
+    }
+
+    // RED LED: Always ON if blinking or solid
+    if (redStatus == 0)
+        digitalWrite(RED_LED_PIN, LOW);
+    else
+        digitalWrite(RED_LED_PIN, HIGH); // Always HIGH
+
+    // BLUE LED: Always ON if blinking or solid
+    if (blueStatus == 0)
+        digitalWrite(BLUE_LED_PIN, LOW);
+    else
+        digitalWrite(BLUE_LED_PIN, HIGH); // Always HIGH
+}
+
+
+
+unsigned long buttonPressStartTime = 0;
+unsigned long lastButtonChangeTime = 0;
+bool buttonWasPressed = false;
+const unsigned long debounceDelay = 50; // 50 ms debounce
+
+void handlePushButton()
+{
+    static int lastButtonState = HIGH;
+    int currentButtonState = digitalRead(PUSH_BUTTON_PIN);
+    unsigned long currentMillis = millis();
+
+    if (currentButtonState != lastButtonState)
+    {
+        lastButtonChangeTime = currentMillis;
+        lastButtonState = currentButtonState;
+    }
+
+    if ((currentMillis - lastButtonChangeTime) > debounceDelay)
+    {
+        // Tombol ditekan (aktif LOW)
+        if (currentButtonState == LOW && !buttonWasPressed)
+        {
+            buttonWasPressed = true;
+            buttonPressStartTime = currentMillis;
+        }
+        // Tombol dilepas
+        else if (currentButtonState == HIGH && buttonWasPressed)
+        {
+            buttonWasPressed = false;
+            unsigned long pressDuration = currentMillis - buttonPressStartTime;
+
+            if (pressDuration >= 10000)
+            {
+                LogInfo("BUTTON", "Long press detected. Erasing ALL settings and restarting...");
+                WiFi.disconnect(true);
+                delay(500);
+                ESP.restart();
+            }
+            else if (pressDuration >= 500)
+            {
+                LogInfo("BUTTON", "Short press detected. Resetting WiFi and opening WiFiManager...");
+                ResetWiFiAndDeviceCredentials();
+                startupFlow();
+            }
+        }
+    }
+}
+
+///////////////// ERASE CONFIG /////////////////////
+
+void ResetWiFiAndDeviceCredentials()
+{
+    GlobalVar &gv = GlobalVar::Instance();
+
+    LogInfo(gv.GetReferenceId(), "Resertting WiFi configuration...");
+    WiFi.disconnect(true);
+    delay(500);
+    gv.SetWifiSSID("");
+    gv.SetWifiPassword("");
+    gv.SetDeviceId(0);
+    gv.SetDeviceName("");
+    gv.SetDevicePassword("");
+    gv.SetReadInterval(1000); // Set default read interval
+    gv.SetIsLoopDisabled(true);
+    gv.SetIsConnectedToWifi(false);
+    gv.ws.close();         // Close WebSocket connection if open
+    gv.pzem.resetEnergy(); // Reset PZEM004T energy data
+    gv.SetLastEnergy(0.0);
+    gv.SetLastResetMonth(""); // Reset last reset month
+
+    LogInfo(gv.GetReferenceId(), "WiFi and Device credentials successfully reset\ted.");
+}
+
+//////////////////////////////////////
 
 void watchWebSocketStatus()
 {
@@ -190,6 +354,8 @@ void startupFlow()
     gv.SetIsConnectedToWifi(true);
 
     LogInfo(gv.GetReferenceId(), "✅ Startup successful!");
+    updateLEDState();
+    handleLED();
 }
 
 void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
@@ -253,11 +419,14 @@ void setup()
     delay(1000);
     WiFi.onEvent(onWiFiConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
     WiFi.onEvent(onWiFiDisconnected);
+
+    updateLEDState(); // <--- Tambahkan ini
+    handleLED();      // <--- Tambahkan ini
+
     startupFlow();
 
     if (WiFi.status() == WL_CONNECTED)
     {
-
         gv.SetIsConnectedToWifi(true);
     }
 
@@ -273,6 +442,10 @@ static unsigned long lastPingMillis = 0;
 void loop()
 {
     GlobalVar &gv = GlobalVar::Instance();
+
+    updateLEDState();
+    handleLED();
+    handlePushButton();
 
     if (!gv.GetIsLoopDisabled() && gv.GetIsConnectedToWifi())
     {
@@ -339,7 +512,7 @@ void updateDevice()
     GlobalVar &gv = GlobalVar::Instance();
 
     // stop loop
-    
+
     gv.SetIsLoopDisabled(true);
 
     LogInfo(gv.GetReferenceId(), "updateDevice - Updating device data...");

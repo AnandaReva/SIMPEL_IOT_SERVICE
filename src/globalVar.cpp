@@ -14,17 +14,22 @@ GlobalVar &GlobalVar::Instance()
 
 GlobalVar::GlobalVar()
     : appName("SIMPEL_DEVICE_SC"),
-      appVersion("0.2.3"),
+      appVersion("0.2.4"),
       serverUrl("http://10.4.157.103:5001"),
-      websocketUrl("ws://10.4.157.103:5001/device-connect"),
-      serial(2), // UART2
+      websocketUrl("ws://10.4.157.103:5001"),
+      serial(2),
       pzem(serial, PZEM_RX_PIN, PZEM_TX_PIN),
       lastEnergy(0.0),
       isLoopDisabled(true),
-      isConnectedToWifi(false)
+      isConnectedToWifi(false),
+      ledInfo{500, 0, 0},
+      deviceInfo{0, "", "", "", "", 0},
+      sensorData{0, 0, 0, 0, 0, 0, ""}
 {
-    deviceInfo = {0, "", "", "", "", 0};
-    sensorData = {0, 0, 0, 0, 0, 0, ""};
+
+    pinMode(BLUE_LED_PIN, OUTPUT);
+    pinMode(RED_LED_PIN, OUTPUT);
+    pinMode(PUSH_BUTTON_PIN, INPUT_PULLUP);
 }
 
 // App Info
@@ -36,6 +41,23 @@ std::string GlobalVar::GetWebsocketUrl() const { return websocketUrl; }
 // Reference ID
 std::string GlobalVar::GetReferenceId() const { return referenceId; }
 void GlobalVar::SetReferenceId(const std::string &ref) { referenceId = ref; }
+
+// LED STATUS
+int GlobalVar::GetLEDBlinkInterval() const { return ledInfo.blinkInterval; }
+int GlobalVar::GetRedLEDStatus() const { return ledInfo.RedLEDStatus; }
+int GlobalVar::GetBlueLEDStatus() const { return ledInfo.BlueLEDStatus; }
+
+void GlobalVar::SetRedLEDStatus(int status)
+{
+    if (status >= 0 && status <= 2)
+        ledInfo.RedLEDStatus = status;
+}
+
+void GlobalVar::SetBlueLEDStatus(int status)
+{
+    if (status >= 0 && status <= 2)
+        ledInfo.BlueLEDStatus = status;
+}
 
 // Device Info
 unsigned long GlobalVar::GetDeviceId() const { return deviceInfo.deviceId; }

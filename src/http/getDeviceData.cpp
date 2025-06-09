@@ -38,8 +38,11 @@
 #include "getDeviceData.h"
 
 bool getDeviceData(const std::string &referenceId)
-{
-    std::string url = GetServerUrl();
+{   GlobalVar &gv = GlobalVar::Instance();
+    std::string url = gv.GetServerUrl();
+    HTTPClient http;
+
+
     LogDebug(referenceId, "getDeviceData - Server URL: " + url);
 
     if (url.empty())
@@ -59,7 +62,7 @@ bool getDeviceData(const std::string &referenceId)
     http.addHeader("process", "device_get_data");
 
     // Bangun payload JSON
-    std::string payload = "{\"name\":\"" + GetDeviceName() + "\",\"password\":\"" + GetDevicePassword() + "\"}";
+    std::string payload = "{\"name\":\"" + gv.GetDeviceName() + "\",\"password\":\"" + gv.GetDevicePassword() + "\"}";
 
     int httpResponseCode = http.POST(payload.c_str());
 
@@ -95,17 +98,17 @@ bool getDeviceData(const std::string &referenceId)
         if (doc["Payload"]["device_last_energy_data"].is<double>())
         {
             double lastEnergy = doc["Payload"]["device_last_energy_data"];
-            SetLastEnergy(lastEnergy);
+            gv.SetLastEnergy(lastEnergy);
 
-            // Reset energy setelah diset
-            SetLastEnergy(0.0);
+            // Regv.Set energy gv.Setelah digv.Set
+            gv.SetLastEnergy(0.0);
         }
         else
         {
-            SetLastEnergy(0.0); // JIka kalau tidak ada
+            gv.SetLastEnergy(0.0); // JIka kalau tidak ada
         }
 
-        LogInfo(referenceId, "getDeviceData - Success. last_energy: " + std::to_string(GetLastEnergy()));
+        LogInfo(referenceId, "getDeviceData - Success. last_energy: " + std::to_string(gv.GetLastEnergy()));
 
         unsigned long deviceId = doc["Payload"]["device_data"]["device_id"];
         int readInterval = doc["Payload"]["device_data"]["device_read_interval"];
@@ -116,12 +119,12 @@ bool getDeviceData(const std::string &referenceId)
         }
 
         // Simpan ke variabel global
-        SetReadInterval(readInterval * 1000);
-        SetDeviceId(deviceId);
+        gv.SetReadInterval(readInterval * 1000);
+        gv.SetDeviceId(deviceId);
 
         LogInfo(referenceId, "getDeviceData - Success. device_id: " +
-                                 std::to_string(GetDeviceId()) + ", read_interval: " +
-                                 std::to_string(GetReadInterval()) + " ms");
+                                 std::to_string(gv.GetDeviceId()) + ", read_interval: " +
+                                 std::to_string(gv.GetReadInterval()) + " ms");
 
         http.end();
         return true;
