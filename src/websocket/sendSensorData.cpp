@@ -36,11 +36,14 @@
 #include "globalVar.h"
 #include "logger.h"
 
-void sendSensorData(const std::string &referenceId)
+bool sendSensorData(const std::string &referenceId)
 {
     GlobalVar &gv = GlobalVar::Instance();
 
-	
+    if (!gv.ws.available()) {
+        LogError(referenceId, "sendSensorData", "WebSocket not connected");
+        return false;
+    }
 
     StaticJsonDocument<250> json;
     json["type"] = "sensor_data";
@@ -54,6 +57,7 @@ void sendSensorData(const std::string &referenceId)
     json["timestamp"] = gv.GetReadTstamp();
     json["free_memory"] = ESP.getFreeHeap();
     json["total_memory"] = ESP.getHeapSize();
+
     std::string payload;
     serializeJson(json, payload);
 
@@ -64,9 +68,11 @@ void sendSensorData(const std::string &referenceId)
         LogDebug(referenceId, "sendSensorData - Sending message");
         gv.ws.send(payload.c_str());
         LogDebug(referenceId, "sendSensorData - Sent successfully");
+        return true;
     }
     catch (const std::exception &e)
     {
         LogError(referenceId, "sendSensorData", "Failed to send: " + std::string(e.what()));
+        return false;
     }
 }

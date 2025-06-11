@@ -27,6 +27,6 @@ bool readPzem004T(const std::string &referenceId);
  *
  * @param referenceId ID referensi untuk logging.
  */
-void sendSensorData(const std::string &referenceId);
+bool sendSensorData(const std::string &referenceId);
 
 #endif // SEND_SENSOR_DATA_H

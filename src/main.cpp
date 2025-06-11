@@ -160,8 +160,6 @@ void handleLED()
         digitalWrite(BLUE_LED_PIN, HIGH); // Always HIGH
 }
 
-
-
 unsigned long buttonPressStartTime = 0;
 unsigned long lastButtonChangeTime = 0;
 bool buttonWasPressed = false;
@@ -258,13 +256,24 @@ void watchWebSocketStatus()
          } });
 }
 
+bool waitForValidTime(int timeoutMs = 10000)
+{
+    const time_t validEpoch = 946684800; // 1 Jan 2000
+    int waited = 0;
+    while (time(nullptr) < validEpoch && waited < timeoutMs)
+    {
+        delay(500);
+        waited += 500;
+    }
+    return time(nullptr) >= validEpoch;
+}
+
 void startWiFiAndGetDeviceData()
 {
     const int maxStartupAttempts = 3;
     const int maxGetDataAttempts = 3;
 
     int startupAttempt = 0;
-
     GlobalVar &gv = GlobalVar::Instance();
 
     while (startupAttempt < maxStartupAttempts)
@@ -275,6 +284,19 @@ void startWiFiAndGetDeviceData()
 
         // Step 1: Buka WiFi Manager
         openWiFiManager(gv.GetReferenceId());
+
+        // ✅ Step 1.5: Sinkronisasi waktu NTP
+        configTime(0, 0, "pool.ntp.org", "time.nist.gov"); // atau gunakan GMT offset jika perlu
+
+        if (waitForValidTime())
+        {
+            time_t now = time(nullptr);
+            LogInfo(gv.GetReferenceId(), "⏱ Time synchronized: " + std::string(ctime(&now)));
+        }
+        else
+        {
+            LogError(gv.GetReferenceId(), "⚠️ Time synchronization failed.");
+        }
 
         // Step 2: Ambil data perangkat
         int getDataTryCount = 0;
@@ -305,6 +327,54 @@ void startWiFiAndGetDeviceData()
     LogError(gv.GetReferenceId(), "❌ All startup attempts failed. Restarting device...");
     ESP.restart();
 }
+
+// void startWiFiAndGetDeviceData()
+// {
+//     const int maxStartupAttempts = 3;
+//     const int maxGetDataAttempts = 3;
+
+//     int startupAttempt = 0;
+
+//     GlobalVar &gv = GlobalVar::Instance();
+
+//     while (startupAttempt < maxStartupAttempts)
+//     {
+//         startupAttempt++;
+//         gv.SetReferenceId("SETUP");
+//         LogInfo(gv.GetReferenceId(), "Startup Attempt #" + std::to_string(startupAttempt));
+
+//         // Step 1: Buka WiFi Manager
+//         openWiFiManager(gv.GetReferenceId());
+
+//         // Step 2: Ambil data perangkat
+//         int getDataTryCount = 0;
+//         bool isDataReceived = false;
+
+//         while (getDataTryCount < maxGetDataAttempts)
+//         {
+//             getDataTryCount++;
+//             LogInfo(gv.GetReferenceId(), "Trying to get device data... Attempt #" + std::to_string(getDataTryCount));
+//             delay(2000);
+
+//             isDataReceived = getDeviceData(gv.GetReferenceId());
+//             if (isDataReceived)
+//                 break;
+//         }
+
+//         if (isDataReceived)
+//         {
+//             LogInfo(gv.GetReferenceId(), "✅ Device data retrieved successfully");
+//             return; // Lanjut ke WebSocket
+//         }
+
+//         LogError(gv.GetReferenceId(), "❌ Failed to get device data. Reopening WiFi Manager...");
+//         WiFi.disconnect(true); // Reset koneksi WiFi
+//         delay(1000);
+//     }
+
+//     LogError(gv.GetReferenceId(), "❌ All startup attempts failed. Restarting device...");
+//     ESP.restart();
+// }
 
 void tryConnectWebSocket()
 {
@@ -490,7 +560,24 @@ void loop()
                 if (gv.ws.available())
                 {
                     LogInfo(gv.GetReferenceId(), "Sending sensor data to server...");
-                    sendSensorData(gv.GetReferenceId());
+                    bool isSendSuccess = sendSensorData(gv.GetReferenceId());
+                    if (isSendSuccess)
+                    {
+                        // Data valid dan pengiriman sukses
+                        if (GlobalVar::Instance().GetRedLEDStatus() != 0)
+                            GlobalVar::Instance().SetRedLEDStatus(0); // Matikan LED merah
+
+                        GlobalVar::Instance().SetBlueLEDStatus(2); // Nyalakan LED biru selama 1 detik
+                    }
+                    else
+                    {
+                        // Gagal kirim meskipun data valid
+                        if (GlobalVar::Instance().GetBlueLEDStatus() != 0)
+                            GlobalVar::Instance().SetBlueLEDStatus(0); // Matikan LED biru jika menyala
+
+                        if (GlobalVar::Instance().GetRedLEDStatus() != 1)
+                            GlobalVar::Instance().SetRedLEDStatus(1); // Nyalakan LED merah jika belum menyala
+                    }
                 }
                 else
                 {
@@ -498,10 +585,17 @@ void loop()
                     tryConnectWebSocket();
                 }
             }
-        }
-        else
-        {
-            delay(1000);
+            else
+            {
+                // Data tidak valid
+                if (GlobalVar::Instance().GetBlueLEDStatus() != 0)
+                    GlobalVar::Instance().SetBlueLEDStatus(0); // Matikan LED biru jika menyala
+
+                if (GlobalVar::Instance().GetRedLEDStatus() != 1)
+                    GlobalVar::Instance().SetRedLEDStatus(1); // Nyalakan LED merah jika belum menyala
+
+                delay(1000);
+            }
         }
     }
 }

@@ -11,12 +11,12 @@
 #include <PZEM004Tv30.h>
 #include <HTTPClient.h>
 
-#define PZEM_RX_PIN 25
-#define PZEM_TX_PIN 26
+#define PZEM_RX_PIN 16 // RX2 devkit v1
+#define PZEM_TX_PIN 17 // TX2 devkit v1
 
-#define BLUE_LED_PIN 34
+#define RED_LED_PIN 2
+#define BLUE_LED_PIN 4
 
-#define RED_LED_PIN 35
 
 #define PUSH_BUTTON_PIN 15
 

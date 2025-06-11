@@ -233,7 +233,17 @@ void connectWebSocket(const std::string &referenceId)
     GlobalVar &gv = GlobalVar::Instance();
 
     LogInfo(referenceId, "Connecting to WebSocket...");
-    std::string websocketUrl = gv.GetWebsocketUrl();
+    std::string websocketUrl = gv.GetWebsocketUrl(); // Contoh: ws://192.168.1.7:5001
+
+    if (!websocketUrl.empty() && websocketUrl[websocketUrl.size() - 1] != '/')
+    {
+        websocketUrl += "/device-connect";
+    }
+    else
+    {
+        websocketUrl += "device-connect";
+    }
+
     LogDebug(referenceId, "WebSocket server URL: " + websocketUrl);
 
     websocketUrl += "?name=" + gv.GetDeviceName() + "&password=" + gv.GetDevicePassword();

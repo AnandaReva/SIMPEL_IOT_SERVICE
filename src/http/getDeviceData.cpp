@@ -19,7 +19,7 @@
  * {
  *     "ErrorCode": "000000",
  *     "ErrorMessage": "",
- *     "Payload": {
+ *     "payload": {
  *         "device_data": {
  *             "device_id": 29,
  *             "device_read_interval": 1,
@@ -79,7 +79,7 @@ bool getDeviceData(const std::string &referenceId)
             return false;
         }
 
-        String status = doc["Payload"]["status"] | "success"; // Optional
+        String status = doc["payload"]["status"] | "success"; // Optional
         if (status != "success")
         {
             LogError(referenceId, "getDeviceData - Response status not successful: " + std::string(status.c_str()));
@@ -87,17 +87,17 @@ bool getDeviceData(const std::string &referenceId)
         }
 
         // Validasi dan ambil data
-        if (!doc["Payload"]["device_data"]["device_read_interval"].is<int>() ||
-            !doc["Payload"]["device_data"]["device_id"].is<int>())
+        if (!doc["payload"]["device_data"]["device_read_interval"].is<int>() ||
+            !doc["payload"]["device_data"]["device_id"].is<int>())
         {
             LogError(referenceId, "getDeviceData - 'device_read_interval' or 'device_id' is invalid.");
             return false;
         }
 
         // Ambil last_energy
-        if (doc["Payload"]["device_last_energy_data"].is<double>())
+       if (doc["payload"]["device_data"]["device_last_energy_data"].is<double>())
         {
-            double lastEnergy = doc["Payload"]["device_last_energy_data"];
+            double lastEnergy = doc["payload"]["device_last_energy_data"];
             gv.SetLastEnergy(lastEnergy);
 
             // Regv.Set energy gv.Setelah digv.Set
@@ -110,8 +110,8 @@ bool getDeviceData(const std::string &referenceId)
 
         LogInfo(referenceId, "getDeviceData - Success. last_energy: " + std::to_string(gv.GetLastEnergy()));
 
-        unsigned long deviceId = doc["Payload"]["device_data"]["device_id"];
-        int readInterval = doc["Payload"]["device_data"]["device_read_interval"];
+        unsigned long deviceId = doc["payload"]["device_data"]["device_id"];
+        int readInterval = doc["payload"]["device_data"]["device_read_interval"];
         if (readInterval <= 0 || readInterval > 120)
         {
             LogError(referenceId, "getDeviceData - 'read_interval' out of range: " + std::to_string(readInterval));

@@ -14,9 +14,9 @@ GlobalVar &GlobalVar::Instance()
 
 GlobalVar::GlobalVar()
     : appName("SIMPEL_DEVICE_SC"),
-      appVersion("0.2.4"),
-      serverUrl("http://10.4.157.103:5001"),
-      websocketUrl("ws://10.4.157.103:5001"),
+      appVersion("0.2.5"),
+      serverUrl("http://192.168.1.7:5001"),
+      websocketUrl("ws://192.168.1.7:5001"),
       serial(2),
       pzem(serial, PZEM_RX_PIN, PZEM_TX_PIN),
       lastEnergy(0.0),
