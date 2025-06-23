@@ -41,7 +41,7 @@ struct DeviceInfo
 struct SensorData
 {
     float power;
-    double energy;
+    float energy;
     float voltage;
     float current;
     float frequency;
@@ -91,7 +91,7 @@ public:
 
     // Sensor Data
     float GetPower() const;
-    double GetEnergy() const;
+    float GetEnergy() const;
     float GetVoltage() const;
     float GetCurrent() const;
     float GetFrequency() const;
@@ -99,7 +99,7 @@ public:
     std::string GetReadTstamp() const;
 
     void SetPower(float);
-    void SetEnergy(double);
+    void SetEnergy(float);
     void SetVoltage(float);
     void SetCurrent(float);
     void SetFrequency(float);
@@ -107,8 +107,8 @@ public:
     void SetReadTstamp(const std::string &);
 
     // Misc
-    double GetLastEnergy() const;
-    void SetLastEnergy(double);
+    float GetLastEnergy() const;
+    void SetLastEnergy(float);
 
     std::string GetLastResetMonth() const;
     void SetLastResetMonth(const std::string &);
@@ -141,7 +141,7 @@ private:
     DeviceInfo deviceInfo;
     SensorData sensorData;
 
-    double lastEnergy;
+    float lastEnergy;
     std::string lastResetMonth;
     bool isLoopDisabled;
     bool isConnectedToWifi;

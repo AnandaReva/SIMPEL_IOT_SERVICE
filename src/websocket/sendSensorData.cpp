@@ -35,6 +35,7 @@
 #include <ArduinoJson.h>
 #include "globalVar.h"
 #include "logger.h"
+#include <esp_heap_caps.h>
 
 bool sendSensorData(const std::string &referenceId)
 {
@@ -55,8 +56,9 @@ bool sendSensorData(const std::string &referenceId)
     json["frequency"] = gv.GetFrequency();
     json["power_factor"] = gv.GetPowerFactor();
     json["timestamp"] = gv.GetReadTstamp();
-    json["free_memory"] = ESP.getFreeHeap();
-    json["total_memory"] = ESP.getHeapSize();
+    json["free_memory"] = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+    json["total_memory"] = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
+
 
     std::string payload;
     serializeJson(json, payload);

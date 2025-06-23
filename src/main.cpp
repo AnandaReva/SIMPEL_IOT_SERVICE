@@ -97,12 +97,31 @@ enum LEDState
     LED_OFF
 };
 
+unsigned long currentMillis = millis();
+unsigned long previousMillis = 0;
+
+unsigned long blueLEDSuccessOnMillis = 0;
+const unsigned long BLUE_LED_SUCCESS_DURATION = 500; // 1 detik
+bool isBlueLEDSuccessActive = false;
+
+static const unsigned long PING_INTERVAL = 5000;
+static unsigned long lastPingMillis = 0;
+
 unsigned long lastLEDToggleTime = 0;
 
 void updateLEDState()
 {
     GlobalVar &gv = GlobalVar::Instance();
 
+    // Jika sedang dalam mode sukses pengiriman (LED biru menyala 1 detik)
+    if (isBlueLEDSuccessActive)
+    {
+        gv.SetRedLEDStatus(0);  // Matikan merah
+        gv.SetBlueLEDStatus(2); // Biru ON
+        return;
+    }
+
+    // Kondisi normal
     if (!WiFi.isConnected())
     {
         gv.SetRedLEDStatus(1);  // BLINK
@@ -116,12 +135,12 @@ void updateLEDState()
     else if (WiFi.isConnected() && gv.GetDeviceId() > 0 && gv.ws.available())
     {
         gv.SetRedLEDStatus(0);  // OFF
-        gv.SetBlueLEDStatus(2); // ON
+        gv.SetBlueLEDStatus(0); // OFF (kecuali saat pengiriman sukses)
     }
     else if (WiFi.isConnected() && gv.GetDeviceId() > 0 && !gv.ws.available())
     {
-        gv.SetRedLEDStatus(0);  // OFF
-        gv.SetBlueLEDStatus(1); // BLINK
+        gv.SetRedLEDStatus(1);  // BLINK (koneksi server terputus)
+        gv.SetBlueLEDStatus(0); // OFF
     }
     else
     {
@@ -134,30 +153,43 @@ void handleLED()
 {
     GlobalVar &gv = GlobalVar::Instance();
     unsigned long now = millis();
+    static unsigned long lastBlinkTime = 0;
+    static bool blinkState = false;
 
-    int redStatus = gv.GetRedLEDStatus();   // 0: OFF, 1: BLINK, 2: ON
-    int blueStatus = gv.GetBlueLEDStatus(); // 0: OFF, 1: BLINK, 2: ON
-    int blinkInterval = gv.GetLEDBlinkInterval();
-
-    static unsigned long lastToggle = 0;
-
-    if (now - lastToggle >= blinkInterval)
+    // Handle blink timing
+    if (now - lastBlinkTime >= gv.GetLEDBlinkInterval())
     {
-        lastToggle = now;
-        // Blink status updated here only for logical tracking, but LED will remain ON
+        lastBlinkTime = now;
+        blinkState = !blinkState;
     }
 
-    // RED LED: Always ON if blinking or solid
+    // RED LED handling
+    int redStatus = gv.GetRedLEDStatus();
     if (redStatus == 0)
+    {
         digitalWrite(RED_LED_PIN, LOW);
+    }
+    else if (redStatus == 1)
+    { // BLINK mode
+        digitalWrite(RED_LED_PIN, blinkState ? HIGH : LOW);
+    }
     else
-        digitalWrite(RED_LED_PIN, HIGH); // Always HIGH
+    { // ON mode
+        digitalWrite(RED_LED_PIN, HIGH);
+    }
 
-    // BLUE LED: Always ON if blinking or solid
+    // BLUE LED handling
+    int blueStatus = gv.GetBlueLEDStatus();
     if (blueStatus == 0)
+    {
         digitalWrite(BLUE_LED_PIN, LOW);
+    }
     else
-        digitalWrite(BLUE_LED_PIN, HIGH); // Always HIGH
+    { // ON mode (blink tidak digunakan untuk biru)
+        digitalWrite(BLUE_LED_PIN, HIGH);
+    }
+
+    LogDebug("LED", std::string("RedStatus: ") + std::to_string(redStatus) + " BlueStatus: " + std::to_string(blueStatus));
 }
 
 unsigned long buttonPressStartTime = 0;
@@ -197,12 +229,6 @@ void handlePushButton()
                 WiFi.disconnect(true);
                 delay(500);
                 ESP.restart();
-            }
-            else if (pressDuration >= 500)
-            {
-                LogInfo("BUTTON", "Short press detected. Resetting WiFi and opening WiFiManager...");
-                ResetWiFiAndDeviceCredentials();
-                startupFlow();
             }
         }
     }
@@ -327,54 +353,6 @@ void startWiFiAndGetDeviceData()
     LogError(gv.GetReferenceId(), "❌ All startup attempts failed. Restarting device...");
     ESP.restart();
 }
-
-// void startWiFiAndGetDeviceData()
-// {
-//     const int maxStartupAttempts = 3;
-//     const int maxGetDataAttempts = 3;
-
-//     int startupAttempt = 0;
-
-//     GlobalVar &gv = GlobalVar::Instance();
-
-//     while (startupAttempt < maxStartupAttempts)
-//     {
-//         startupAttempt++;
-//         gv.SetReferenceId("SETUP");
-//         LogInfo(gv.GetReferenceId(), "Startup Attempt #" + std::to_string(startupAttempt));
-
-//         // Step 1: Buka WiFi Manager
-//         openWiFiManager(gv.GetReferenceId());
-
-//         // Step 2: Ambil data perangkat
-//         int getDataTryCount = 0;
-//         bool isDataReceived = false;
-
-//         while (getDataTryCount < maxGetDataAttempts)
-//         {
-//             getDataTryCount++;
-//             LogInfo(gv.GetReferenceId(), "Trying to get device data... Attempt #" + std::to_string(getDataTryCount));
-//             delay(2000);
-
-//             isDataReceived = getDeviceData(gv.GetReferenceId());
-//             if (isDataReceived)
-//                 break;
-//         }
-
-//         if (isDataReceived)
-//         {
-//             LogInfo(gv.GetReferenceId(), "✅ Device data retrieved successfully");
-//             return; // Lanjut ke WebSocket
-//         }
-
-//         LogError(gv.GetReferenceId(), "❌ Failed to get device data. Reopening WiFi Manager...");
-//         WiFi.disconnect(true); // Reset koneksi WiFi
-//         delay(1000);
-//     }
-
-//     LogError(gv.GetReferenceId(), "❌ All startup attempts failed. Restarting device...");
-//     ESP.restart();
-// }
 
 void tryConnectWebSocket()
 {
@@ -504,99 +482,104 @@ void setup()
     LogDebug(gv.GetReferenceId(), "isConnectedToWifi: " + std::to_string(gv.GetIsConnectedToWifi()));
 };
 
-unsigned long currentMillis = millis();
-unsigned long previousMillis = 0;
-
-static const unsigned long PING_INTERVAL = 5000;
-static unsigned long lastPingMillis = 0;
 void loop()
 {
     GlobalVar &gv = GlobalVar::Instance();
+    unsigned long now = millis();
 
+    // === [1] Update status LED & tombol ===
     updateLEDState();
     handleLED();
     handlePushButton();
 
-    if (!gv.GetIsLoopDisabled() && gv.GetIsConnectedToWifi())
+    // === [2] Cek koneksi dan status loop ===
+    if (gv.GetIsLoopDisabled() || !gv.GetIsConnectedToWifi())
+        return;
+
+    // === [3] Kirim ping ke server jika waktunya ===
+    if (gv.ws.available() && now - lastPingMillis >= PING_INTERVAL)
     {
+        lastPingMillis = now;
 
-        unsigned long now = millis();
+        StaticJsonDocument<128> pingDoc;
+        pingDoc["type"] = "ping";
+        pingDoc["device_id"] = gv.GetDeviceId();
 
-        // 1) Kirim ping secara periodik
-        if (gv.ws.available() && now - lastPingMillis >= PING_INTERVAL)
+        std::string pingPayload;
+        serializeJson(pingDoc, pingPayload);
+
+        LogDebug(gv.GetReferenceId(), "WEBSOCKET - Sending ping");
+        gv.ws.send(pingPayload.c_str());
+    }
+
+    // WebSocket polling untuk terima pesan masuk
+    gv.ws.poll();
+
+    // === [4] Cek apakah waktunya membaca dan mengirim data sensor ===
+    currentMillis = millis();
+    if (currentMillis - previousMillis < gv.GetReadInterval())
+        return;
+
+    previousMillis = currentMillis;
+    gv.SetReferenceId(generateRandStr(8));
+
+    LogDebug(gv.GetReferenceId(), "===== Generated reference id: " + gv.GetReferenceId() + " =====");
+    LogDebug(gv.GetReferenceId(), "Free heap: " + std::string(String(ESP.getFreeHeap()).c_str()) + " byte");
+
+    // === [5] Baca data sensor ===
+    bool isDataValid = readPzem004T(gv.GetReferenceId());
+
+    if (!isDataValid)
+    {
+        // ⚠️ Data tidak valid
+        gv.SetBlueLEDStatus(0); // Matikan biru
+        gv.SetRedLEDStatus(1);  // Nyalakan merah
+        delay(500);             // Nyalakan selama 0.5 detik
+        gv.SetRedLEDStatus(0);  // Matikan kembali
+        return;
+    }
+
+    // === [6] Kirim data sensor jika WebSocket tersedia ===
+    // === [6] Kirim data sensor jika WebSocket tersedia ===
+    if (gv.ws.available())
+    {
+        LogInfo(gv.GetReferenceId(), "Sensor data is valid, sending to server...");
+
+        bool isSendSuccess = sendSensorData(gv.GetReferenceId());
+        if (isSendSuccess)
         {
-            lastPingMillis = now;
-
-            // Bangun pesan ping
-            StaticJsonDocument<128> pingDoc;
-            pingDoc["type"] = "ping";
-            pingDoc["device_id"] = gv.GetDeviceId();
-
-            LogDebug(gv.GetReferenceId(), "WEBSOCKET - Sending ping");
-
-            std::string pingPayload;
-            serializeJson(pingDoc, pingPayload);
-
-            gv.ws.send(pingPayload.c_str());
-            LogDebug(gv.GetReferenceId(), "WEBSOCKET - Sent ping");
+            // ✅ Kirim sukses
+            gv.SetRedLEDStatus(0);  // Matikan merah
+            gv.SetBlueLEDStatus(2); // Nyalakan biru
+            isBlueLEDSuccessActive = true;
+            blueLEDSuccessOnMillis = millis();
         }
-
-        gv.ws.poll();
-
-        currentMillis = millis();
-
-        if (currentMillis - previousMillis >= gv.GetReadInterval())
+        else
         {
-            previousMillis = currentMillis;
-            gv.SetReferenceId(generateRandStr(8));
-
-            LogDebug(gv.GetReferenceId(), "===== Generated reference id: " + gv.GetReferenceId() + " =====");
-            LogDebug(gv.GetReferenceId(), "Free heap: " + std::string(String(ESP.getFreeHeap()).c_str()) + " byte");
-
-            bool isDataValid = readPzem004T(gv.GetReferenceId());
-            if (isDataValid)
-            {
-                LogInfo(gv.GetReferenceId(), "Sensor data is valid, send to server: ");
-                if (gv.ws.available())
-                {
-                    LogInfo(gv.GetReferenceId(), "Sending sensor data to server...");
-                    bool isSendSuccess = sendSensorData(gv.GetReferenceId());
-                    if (isSendSuccess)
-                    {
-                        // Data valid dan pengiriman sukses
-                        if (GlobalVar::Instance().GetRedLEDStatus() != 0)
-                            GlobalVar::Instance().SetRedLEDStatus(0); // Matikan LED merah
-
-                        GlobalVar::Instance().SetBlueLEDStatus(2); // Nyalakan LED biru selama 1 detik
-                    }
-                    else
-                    {
-                        // Gagal kirim meskipun data valid
-                        if (GlobalVar::Instance().GetBlueLEDStatus() != 0)
-                            GlobalVar::Instance().SetBlueLEDStatus(0); // Matikan LED biru jika menyala
-
-                        if (GlobalVar::Instance().GetRedLEDStatus() != 1)
-                            GlobalVar::Instance().SetRedLEDStatus(1); // Nyalakan LED merah jika belum menyala
-                    }
-                }
-                else
-                {
-                    LogWarning(gv.GetReferenceId(), "WebSocket not available, cannot send data");
-                    tryConnectWebSocket();
-                }
-            }
-            else
-            {
-                // Data tidak valid
-                if (GlobalVar::Instance().GetBlueLEDStatus() != 0)
-                    GlobalVar::Instance().SetBlueLEDStatus(0); // Matikan LED biru jika menyala
-
-                if (GlobalVar::Instance().GetRedLEDStatus() != 1)
-                    GlobalVar::Instance().SetRedLEDStatus(1); // Nyalakan LED merah jika belum menyala
-
-                delay(1000);
-            }
+            // ❌ Kirim gagal
+            gv.SetBlueLEDStatus(0); // Matikan biru
+            gv.SetRedLEDStatus(1);  // Nyalakan merah
+            delay(500);             // Tahan selama 0.5 detik
+            gv.SetRedLEDStatus(0);  // Matikan merah
         }
+    }
+    else
+    {
+        LogWarning(gv.GetReferenceId(), "WebSocket not available, trying to reconnect...");
+
+        // Tambahkan pengaturan LED di sini
+        gv.SetBlueLEDStatus(0); // Matikan LED biru
+        gv.SetRedLEDStatus(1);  // Nyalakan LED merah
+
+        tryConnectWebSocket();
+    }
+
+    // === [7] Matikan LED biru setelah durasi sukses ===
+    if (isBlueLEDSuccessActive && millis() - blueLEDSuccessOnMillis >= BLUE_LED_SUCCESS_DURATION)
+    {
+        isBlueLEDSuccessActive = false;
+        gv.SetBlueLEDStatus(0); // OFF
+        updateLEDState();       // <- tambahkan ini
     }
 }
 
@@ -608,6 +591,7 @@ void updateDevice()
     // stop loop
 
     gv.SetIsLoopDisabled(true);
+    gv.ws.close();
 
     LogInfo(gv.GetReferenceId(), "updateDevice - Updating device data...");
 
@@ -640,4 +624,25 @@ void updateDevice()
         // Jika gagal, jalankan startupFlow()
         startupFlow();
     }
+}
+// Fungsi untuk restart perangkat secara terkontrol
+void restartDevice()
+{
+    GlobalVar &gv = GlobalVar::Instance();
+    gv.ws.close();
+
+    LogWarning(gv.GetReferenceId(), "⚠️ Restarting device ");
+    delay(1000);
+    ESP.restart();
+}
+
+// Fungsi untuk masuk deep sleep mode
+void deepSleepDevice()
+{
+    GlobalVar &gv = GlobalVar::Instance();
+    gv.ws.close();
+
+    LogWarning(gv.GetReferenceId(), "💤 Entering deep sleep ");
+    delay(500);
+    ESP.deepSleep(0);
 }

@@ -14,7 +14,7 @@ GlobalVar &GlobalVar::Instance()
 
 GlobalVar::GlobalVar()
     : appName("SIMPEL_DEVICE_SC"),
-      appVersion("0.2.5"),
+      appVersion("1.0.1"),
       serverUrl("http://192.168.1.7:5001"),
       websocketUrl("ws://192.168.1.7:5001"),
       serial(2),
@@ -76,7 +76,7 @@ void GlobalVar::SetReadInterval(unsigned long interval) { deviceInfo.readInterva
 
 // Sensor Data
 float GlobalVar::GetPower() const { return sensorData.power; }
-double GlobalVar::GetEnergy() const { return sensorData.energy; }
+float GlobalVar::GetEnergy() const { return sensorData.energy; }
 float GlobalVar::GetVoltage() const { return sensorData.voltage; }
 float GlobalVar::GetCurrent() const { return sensorData.current; }
 float GlobalVar::GetFrequency() const { return sensorData.frequency; }
@@ -84,7 +84,7 @@ float GlobalVar::GetPowerFactor() const { return sensorData.powerFactor; }
 std::string GlobalVar::GetReadTstamp() const { return sensorData.readTstamp; }
 
 void GlobalVar::SetPower(float v) { sensorData.power = v; }
-void GlobalVar::SetEnergy(double v) { sensorData.energy = v; }
+void GlobalVar::SetEnergy(float v) { sensorData.energy = v; }
 void GlobalVar::SetVoltage(float v) { sensorData.voltage = v; }
 void GlobalVar::SetCurrent(float v) { sensorData.current = v; }
 void GlobalVar::SetFrequency(float v) { sensorData.frequency = v; }
@@ -92,8 +92,9 @@ void GlobalVar::SetPowerFactor(float v) { sensorData.powerFactor = v; }
 void GlobalVar::SetReadTstamp(const std::string &ts) { sensorData.readTstamp = ts; }
 
 // Misc
-double GlobalVar::GetLastEnergy() const { return lastEnergy; }
-void GlobalVar::SetLastEnergy(double e) { lastEnergy = e; }
+float GlobalVar::GetLastEnergy() const { return lastEnergy; }
+void GlobalVar::SetLastEnergy(float e) { lastEnergy = e; }
+
 
 std::string GlobalVar::GetLastResetMonth() const { return lastResetMonth; }
 void GlobalVar::SetLastResetMonth(const std::string &m) { lastResetMonth = m; }
