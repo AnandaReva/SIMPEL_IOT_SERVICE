@@ -189,7 +189,7 @@ void handleLED()
         digitalWrite(BLUE_LED_PIN, HIGH);
     }
 
-    LogDebug("LED", std::string("RedStatus: ") + std::to_string(redStatus) + " BlueStatus: " + std::to_string(blueStatus));
+    //  LogDebug("LED", std::string("RedStatus: ") + std::to_string(redStatus) + " BlueStatus: " + std::to_string(blueStatus));
 }
 
 unsigned long buttonPressStartTime = 0;
@@ -354,39 +354,107 @@ void startWiFiAndGetDeviceData()
     ESP.restart();
 }
 
+// void tryConnectWebSocket()
+// {
+//     const int maxWebSocketAttempts = 3;
+//     int wsFailCount = 0;
+
+//     GlobalVar &gv = GlobalVar::Instance();
+
+//     while (wsFailCount < maxWebSocketAttempts)
+//     {
+//         gv.SetReferenceId("WS" + std::to_string(wsFailCount + 1));
+
+//         // PANGGIL INI DULU!
+//         watchWebSocketStatus();
+
+//         connectWebSocket(gv.GetReferenceId());
+
+//         delay(2000);
+//         if (gv.ws.available())
+//         {
+//             LogInfo(gv.GetReferenceId(), "✅ WebSocket connected successfully");
+//             gv.SetIsLoopDisabled(false);
+//             return;
+//         }
+
+//         wsFailCount++;
+//         gv.ws.close();
+//         LogWarning(gv.GetReferenceId(), "WebSocket connection failed, retrying...");
+//     }
+
+//     LogError(gv.GetReferenceId(), "❌ WebSocket repeatedly failed. Reopening WiFi Manager...");
+//     WiFi.disconnect(true);
+//     delay(1000);
+//     startupFlow();
+// }
+
+
+void handleWebSocketFailure(const std::string& referenceId)
+{
+    static int wsFailCount = 0;
+    wsFailCount++;
+
+    LogWarning(referenceId, "WebSocket failure count: " + std::to_string(wsFailCount));
+
+    if (wsFailCount >= 3)
+    {
+        LogError(referenceId, "❌ WebSocket repeatedly failed. Reopening WiFi Manager...");
+        wsFailCount = 0;
+        WiFi.disconnect(true);
+        delay(1000);
+        startupFlow();
+    }
+}
+
 void tryConnectWebSocket()
 {
     const int maxWebSocketAttempts = 3;
-    int wsFailCount = 0;
+    int attempt = 0;
 
     GlobalVar &gv = GlobalVar::Instance();
 
-    while (wsFailCount < maxWebSocketAttempts)
+    while (attempt < maxWebSocketAttempts)
     {
-        gv.SetReferenceId("WS" + std::to_string(wsFailCount + 1));
+        gv.SetReferenceId("WS" + std::to_string(attempt + 1));
+        std::string ref = gv.GetReferenceId();
 
-        connectWebSocket(gv.GetReferenceId());
-        watchWebSocketStatus(); // <— panggil di sini tiap kali connect
+        watchWebSocketStatus();
+        connectWebSocket(ref);
 
         delay(2000);
         if (gv.ws.available())
         {
-            LogInfo(gv.GetReferenceId(), "✅ WebSocket connected successfully");
+            LogInfo(ref, "✅ WebSocket connected successfully");
             gv.SetIsLoopDisabled(false);
             return;
         }
 
-        wsFailCount++;
         gv.ws.close();
-        LogWarning(gv.GetReferenceId(), "WebSocket connection failed, retrying...");
+        LogWarning(ref, "WebSocket connection failed, retrying...");
+        attempt++;
     }
 
-    // Kalau 3x gagal
-    LogError(gv.GetReferenceId(), "❌ WebSocket repeatedly failed. Reopening WiFi Manager...");
-    WiFi.disconnect(true);
-    delay(1000);
-    startupFlow();
+    handleWebSocketFailure(gv.GetReferenceId());
 }
+
+
+
+void onWebSocketClose()
+{
+    GlobalVar &gv = GlobalVar::Instance();
+    std::string referenceId = generateRandStr(8);
+
+    LogWarning(referenceId, "WEBSOCKET - Connection closed");
+
+    gv.SetIsLoopDisabled(true);
+    gv.SetRedLEDStatus(2);
+    gv.SetBlueLEDStatus(0);
+    handleLED();
+
+    handleWebSocketFailure(referenceId);
+}
+
 
 void startupFlow()
 {
@@ -435,27 +503,37 @@ void onWebSocketOpen()
     gv.SetIsLoopDisabled(false);
 }
 
-void onWebSocketClose()
-{
+// void onWebSocketClose()
+// {
+//     static int wsFailCount = 0;
+//     wsFailCount++;
 
-    static int wsFailCount = 0;
-    wsFailCount++;
+//     GlobalVar &gv = GlobalVar::Instance();
 
-    GlobalVar &gv = GlobalVar::Instance();
+//     std::string referenceId = generateRandStr(8);
+//     LogWarning(referenceId, "WEBSOCKET - Connection closed");
 
-    std::string referenceId = generateRandStr(8);
-    LogWarning(referenceId, "WEBSOCKET - Connection closed");
-    gv.SetIsLoopDisabled(true);
+//     // 🟠 Matikan loop
+//     gv.SetIsLoopDisabled(true);
 
-    if (wsFailCount >= 3)
-    {
-        LogError(referenceId, "❌ WebSocket repeatedly failed. Reopening WiFi Manager...");
-        wsFailCount = 0;
-        WiFi.disconnect(true);
-        delay(1000);
-        startupFlow();
-    }
-}
+//     // 🔴 Merah ON, 🔵 Biru OFF
+//     gv.SetRedLEDStatus(2);  // LED merah menyala (mode ON)
+//     gv.SetBlueLEDStatus(0); // LED biru mati
+//     handleLED();            // Terapkan ke pin fisik
+
+//     // 🔄 Mulai ulang koneksi WiFi setelah beberapa kali gagal
+//     if (wsFailCount >= 3)
+//     {
+//         LogError(referenceId, "❌ WebSocket repeatedly failed. Reopening WiFi Manager...");
+//         wsFailCount = 0;
+
+//         WiFi.disconnect(true); // Reset WiFi
+//         delay(1000);
+
+//         // ✅ Mulai ulang koneksi & ambil data device
+//         startupFlow();
+//     }
+// }
 
 void setup()
 {
@@ -487,16 +565,23 @@ void loop()
     GlobalVar &gv = GlobalVar::Instance();
     unsigned long now = millis();
 
-    // === [1] Update status LED & tombol ===
-    updateLEDState();
-    handleLED();
-    handlePushButton();
+    // === [1] Periksa status koneksi WebSocket & atur LED sesuai ===
+    if (!gv.ws.available())
+    {
+        // Jika WebSocket tidak tersedia → Merah ON, Biru OFF
+        gv.SetRedLEDStatus(1);  // BLINK merah
+        gv.SetBlueLEDStatus(0); // OFF biru
+    }
 
-    // === [2] Cek koneksi dan status loop ===
-    if (gv.GetIsLoopDisabled() || !gv.GetIsConnectedToWifi())
-        return;
+    // === [2] Update LED dan tombol ===
+    updateLEDState();   // Perbarui logika status LED berdasarkan kondisi global
+    handleLED();        // Eksekusi LED fisik
+    handlePushButton(); // Cek push button
 
-    // === [3] Kirim ping ke server jika waktunya ===
+    // === [3] Cek koneksi dan status loop ===
+    gv.ws.poll();
+
+    // === [4] Kirim ping ke server jika waktunya ===
     if (gv.ws.available() && now - lastPingMillis >= PING_INTERVAL)
     {
         lastPingMillis = now;
@@ -512,10 +597,10 @@ void loop()
         gv.ws.send(pingPayload.c_str());
     }
 
-    // WebSocket polling untuk terima pesan masuk
+    // === [5] Polling WebSocket ===
     gv.ws.poll();
 
-    // === [4] Cek apakah waktunya membaca dan mengirim data sensor ===
+    // === [6] Cek interval pembacaan data sensor ===
     currentMillis = millis();
     if (currentMillis - previousMillis < gv.GetReadInterval())
         return;
@@ -526,21 +611,19 @@ void loop()
     LogDebug(gv.GetReferenceId(), "===== Generated reference id: " + gv.GetReferenceId() + " =====");
     LogDebug(gv.GetReferenceId(), "Free heap: " + std::string(String(ESP.getFreeHeap()).c_str()) + " byte");
 
-    // === [5] Baca data sensor ===
+    // === [7] Baca data sensor ===
     bool isDataValid = readPzem004T(gv.GetReferenceId());
 
     if (!isDataValid)
     {
-        // ⚠️ Data tidak valid
-        gv.SetBlueLEDStatus(0); // Matikan biru
-        gv.SetRedLEDStatus(1);  // Nyalakan merah
-        delay(500);             // Nyalakan selama 0.5 detik
-        gv.SetRedLEDStatus(0);  // Matikan kembali
+        gv.SetBlueLEDStatus(0); // Biru OFF
+        gv.SetRedLEDStatus(1);  // Merah BLINK
+        delay(500);             // Tahan 0.5 detik
+        gv.SetRedLEDStatus(0);  // Matikan merah
         return;
     }
 
-    // === [6] Kirim data sensor jika WebSocket tersedia ===
-    // === [6] Kirim data sensor jika WebSocket tersedia ===
+    // === [8] Kirim data sensor jika WebSocket tersedia ===
     if (gv.ws.available())
     {
         LogInfo(gv.GetReferenceId(), "Sensor data is valid, sending to server...");
@@ -548,38 +631,33 @@ void loop()
         bool isSendSuccess = sendSensorData(gv.GetReferenceId());
         if (isSendSuccess)
         {
-            // ✅ Kirim sukses
-            gv.SetRedLEDStatus(0);  // Matikan merah
-            gv.SetBlueLEDStatus(2); // Nyalakan biru
+            gv.SetRedLEDStatus(0);  // Merah OFF
+            gv.SetBlueLEDStatus(2); // Biru ON sesaat
             isBlueLEDSuccessActive = true;
             blueLEDSuccessOnMillis = millis();
         }
         else
         {
-            // ❌ Kirim gagal
-            gv.SetBlueLEDStatus(0); // Matikan biru
-            gv.SetRedLEDStatus(1);  // Nyalakan merah
-            delay(500);             // Tahan selama 0.5 detik
-            gv.SetRedLEDStatus(0);  // Matikan merah
+            gv.SetBlueLEDStatus(0); // OFF
+            gv.SetRedLEDStatus(1);  // ON / BLINK
+            delay(500);
+            gv.SetRedLEDStatus(0); // OFF
         }
     }
     else
     {
         LogWarning(gv.GetReferenceId(), "WebSocket not available, trying to reconnect...");
 
-        // Tambahkan pengaturan LED di sini
-        gv.SetBlueLEDStatus(0); // Matikan LED biru
-        gv.SetRedLEDStatus(1);  // Nyalakan LED merah
-
+        gv.SetBlueLEDStatus(0); // OFF
+        gv.SetRedLEDStatus(1);  // ON
         tryConnectWebSocket();
     }
 
-    // === [7] Matikan LED biru setelah durasi sukses ===
+    // === [9] Matikan LED biru setelah waktu sukses ===
     if (isBlueLEDSuccessActive && millis() - blueLEDSuccessOnMillis >= BLUE_LED_SUCCESS_DURATION)
     {
         isBlueLEDSuccessActive = false;
         gv.SetBlueLEDStatus(0); // OFF
-        updateLEDState();       // <- tambahkan ini
     }
 }
 
