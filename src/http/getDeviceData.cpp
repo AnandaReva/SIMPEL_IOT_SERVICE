@@ -38,102 +38,91 @@
 #include "getDeviceData.h"
 
 bool getDeviceData(const std::string &referenceId)
-{   GlobalVar &gv = GlobalVar::Instance();
+{
+    GlobalVar &gv = GlobalVar::Instance();
     std::string url = gv.GetServerUrl();
     HTTPClient http;
 
-
     LogDebug(referenceId, "getDeviceData - Server URL: " + url);
-
     if (url.empty())
     {
-        LogError(referenceId, "getDeviceData - URL empty " + url);
+        LogError(referenceId, "getDeviceData - URL empty");
         return false;
     }
 
     url += "/process";
-
-    LogDebug(referenceId, "getDeviceData - Complete URL: " + url);
-
     http.begin(url.c_str());
 
-    // Tambahkan header yang dibutuhkan
     http.addHeader("Content-Type", "application/json");
     http.addHeader("process", "device_get_data");
 
-    // Bangun payload JSON
     std::string payload = "{\"name\":\"" + gv.GetDeviceName() + "\",\"password\":\"" + gv.GetDevicePassword() + "\"}";
 
     int httpResponseCode = http.POST(payload.c_str());
-
-    if (httpResponseCode == 200)
+    if (httpResponseCode != 200)
     {
-        String response = http.getString();
-        LogInfo(referenceId, "getDeviceData - Received response: " + std::string(response.c_str()));
-
-        StaticJsonDocument<1024> doc;
-        DeserializationError error = deserializeJson(doc, response);
-        if (error)
-        {
-            LogError(referenceId, "getDeviceData - Failed to parse JSON response: " + std::string(error.c_str()));
-            return false;
-        }
-
-        String status = doc["payload"]["status"] | "success"; // Optional
-        if (status != "success")
-        {
-            LogError(referenceId, "getDeviceData - Response status not successful: " + std::string(status.c_str()));
-            return false;
-        }
-
-        // Validasi dan ambil data
-        if (!doc["payload"]["device_data"]["device_read_interval"].is<int>() ||
-            !doc["payload"]["device_data"]["device_id"].is<int>())
-        {
-            LogError(referenceId, "getDeviceData - 'device_read_interval' or 'device_id' is invalid.");
-            return false;
-        }
-
-        // Ambil last_energy
-       if (doc["payload"]["device_data"]["device_last_energy_data"].is<double>())
-        {
-            double lastEnergy = doc["payload"]["device_last_energy_data"];
-            gv.SetLastEnergy(lastEnergy);
-
-            // Regv.Set energy gv.Setelah digv.Set
-            gv.SetLastEnergy(0.0);
-        }
-        else
-        {
-            gv.SetLastEnergy(0.0); // JIka kalau tidak ada
-        }
-
-        LogInfo(referenceId, "getDeviceData - Success. last_energy: " + std::to_string(gv.GetLastEnergy()));
-
-        unsigned long deviceId = doc["payload"]["device_data"]["device_id"];
-        int readInterval = doc["payload"]["device_data"]["device_read_interval"];
-        if (readInterval <= 0 || readInterval > 120)
-        {
-            LogError(referenceId, "getDeviceData - 'read_interval' out of range: " + std::to_string(readInterval));
-            return false;
-        }
-
-        // Simpan ke variabel global
-        gv.SetReadInterval(readInterval * 1000);
-        gv.SetDeviceId(deviceId);
-
-        LogInfo(referenceId, "getDeviceData - Success. device_id: " +
-                                 std::to_string(gv.GetDeviceId()) + ", read_interval: " +
-                                 std::to_string(gv.GetReadInterval()) + " ms");
-
+        LogError(referenceId, "getDeviceData - HTTP request failed, code: " + std::to_string(httpResponseCode));
         http.end();
-        return true;
+        return false;
+    }
+
+    String response = http.getString();
+    LogInfo(referenceId, "getDeviceData - Received response: " + std::string(response.c_str()));
+
+    StaticJsonDocument<1024> doc;
+    DeserializationError error = deserializeJson(doc, response);
+    if (error)
+    {
+        LogError(referenceId, "getDeviceData - JSON parse error: " + std::string(error.c_str()));
+        http.end();
+        return false;
+    }
+
+    String status = doc["payload"]["status"] | "success";
+    if (status != "success")
+    {
+        LogError(referenceId, "getDeviceData - Response status: " + std::string(status.c_str()));
+        http.end();
+        return false;
+    }
+
+    // ✅ Ambil device_id dan interval
+    if (!doc["payload"]["device_data"]["device_read_interval"].is<int>() ||
+        !doc["payload"]["device_data"]["device_id"].is<int>())
+    {
+        LogError(referenceId, "getDeviceData - device_read_interval/device_id invalid");
+        http.end();
+        return false;
+    }
+
+    unsigned long deviceId = doc["payload"]["device_data"]["device_id"];
+    int readInterval = doc["payload"]["device_data"]["device_read_interval"];
+    gv.SetDeviceId(deviceId);
+    gv.SetReadInterval(readInterval * 1000);
+
+    // ✅ Ambil last_energy
+    if (doc["payload"]["device_data"]["device_last_energy_data"].is<float>())
+    {
+        float lastEnergy = doc["payload"]["device_data"]["device_last_energy_data"];
+        gv.SetLastEnergy(lastEnergy);
     }
     else
     {
-        LogError(referenceId, "getDeviceData - HTTP request failed, code: " + std::to_string(httpResponseCode));
+        gv.SetLastEnergy(0.0);
     }
 
+    // ✅ Ambil last_month
+    if (doc["payload"]["last_month"].is<int>())
+    {
+        gv.SetLastResetMonth(doc["payload"]["last_month"].as<int>());
+    }
+    else
+    {
+        gv.SetLastResetMonth(0); // fallback
+    }
+
+    LogInfo(referenceId, "getDeviceData - last_energy: " + std::to_string(gv.GetLastEnergy()) +
+                             ", last_month: " + std::to_string(gv.GetLastResetMonth()));
     http.end();
-    return false;
+    return true;
 }

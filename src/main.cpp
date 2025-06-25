@@ -254,7 +254,7 @@ void ResetWiFiAndDeviceCredentials()
     gv.ws.close();         // Close WebSocket connection if open
     gv.pzem.resetEnergy(); // Reset PZEM004T energy data
     gv.SetLastEnergy(0.0);
-    gv.SetLastResetMonth(""); // Reset last reset month
+    gv.SetLastResetMonth(0); // Reset last reset month
 
     LogInfo(gv.GetReferenceId(), "WiFi and Device credentials successfully reset\ted.");
 }

@@ -41,7 +41,8 @@ bool sendSensorData(const std::string &referenceId)
 {
     GlobalVar &gv = GlobalVar::Instance();
 
-    if (!gv.ws.available()) {
+    if (!gv.ws.available())
+    {
         LogError(referenceId, "sendSensorData", "WebSocket not connected");
         return false;
     }
@@ -52,13 +53,12 @@ bool sendSensorData(const std::string &referenceId)
     json["voltage"] = gv.GetVoltage();
     json["current"] = gv.GetCurrent();
     json["power"] = gv.GetPower();
-    json["energy"] = gv.GetEnergy();
+    json["energy"] = gv.GetDeltaEnergy(); 
     json["frequency"] = gv.GetFrequency();
     json["power_factor"] = gv.GetPowerFactor();
     json["timestamp"] = gv.GetReadTstamp();
     json["free_memory"] = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
     json["total_memory"] = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
-
 
     std::string payload;
     serializeJson(json, payload);

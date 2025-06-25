@@ -14,12 +14,14 @@ GlobalVar &GlobalVar::Instance()
 
 GlobalVar::GlobalVar()
     : appName("SIMPEL_DEVICE_SC"),
-      appVersion("1.0.2"),
-      serverUrl("http://192.168.1.9:5001"),
-      websocketUrl("ws://192.168.1.9:5001"),
+      appVersion("1.0.3"),
+      serverUrl("http://192.168.1.10:5001"),
+      websocketUrl("ws://192.168.1.10:5001"),
       serial(2),
       pzem(serial, PZEM_RX_PIN, PZEM_TX_PIN),
       lastEnergy(0.0),
+      deltaEnergy(0.0),
+      lastResetMonth(0),
       isLoopDisabled(true),
       isConnectedToWifi(false),
       ledInfo{500, 0, 0},
@@ -95,9 +97,11 @@ void GlobalVar::SetReadTstamp(const std::string &ts) { sensorData.readTstamp = t
 float GlobalVar::GetLastEnergy() const { return lastEnergy; }
 void GlobalVar::SetLastEnergy(float e) { lastEnergy = e; }
 
+float GlobalVar::GetDeltaEnergy() const { return deltaEnergy; }
+void GlobalVar::SetDeltaEnergy(float d) { deltaEnergy = d; }
 
-std::string GlobalVar::GetLastResetMonth() const { return lastResetMonth; }
-void GlobalVar::SetLastResetMonth(const std::string &m) { lastResetMonth = m; }
+int GlobalVar::GetLastResetMonth() const { return lastResetMonth; }
+void GlobalVar::SetLastResetMonth(int m) { lastResetMonth = m; }
 
 bool GlobalVar::GetIsLoopDisabled() const { return isLoopDisabled; }
 void GlobalVar::SetIsLoopDisabled(bool val) { isLoopDisabled = val; }

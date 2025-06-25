@@ -17,14 +17,13 @@
 #define RED_LED_PIN 2
 #define BLUE_LED_PIN 4
 
-
 #define PUSH_BUTTON_PIN 15
 
 // LED rule : 0 = off , 1 = on , 2 = blink
 struct LEDInfo
 {
     int blinkInterval;
-    int RedLEDStatus ;  // 0 = off, 1 = on Solid , 2 = on blink
+    int RedLEDStatus;  // 0 = off, 1 = on Solid , 2 = on blink
     int BlueLEDStatus; // 0 = off, 1 = on solid, 2 = blink
 };
 
@@ -69,8 +68,6 @@ public:
     int GetBlueLEDStatus() const;
     int GetLEDBlinkInterval() const;
 
-
-
     void SetRedLEDStatus(int status);
     void SetBlueLEDStatus(int status);
 
@@ -110,8 +107,11 @@ public:
     float GetLastEnergy() const;
     void SetLastEnergy(float);
 
-    std::string GetLastResetMonth() const;
-    void SetLastResetMonth(const std::string &);
+    float GetDeltaEnergy() const;
+    void SetDeltaEnergy(float);
+
+    int GetLastResetMonth() const;
+    void SetLastResetMonth(int);
 
     bool GetIsLoopDisabled() const;
     void SetIsLoopDisabled(bool);
@@ -142,11 +142,10 @@ private:
     SensorData sensorData;
 
     float lastEnergy;
-    std::string lastResetMonth;
+    float deltaEnergy;
+    int lastResetMonth;
     bool isLoopDisabled;
     bool isConnectedToWifi;
 };
 
 #endif
-
-
